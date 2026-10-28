@@ -1,0 +1,21 @@
+,tipo,nulos,porcentaje_nulos,valores_distintos
+Make,str,0,0.0,33
+Model,str,0,0.0,1050
+Price,int64,0,0.0,619
+Year,int64,0,0.0,22
+Kilometer,int64,0,0.0,847
+Fuel Type,str,0,0.0,9
+Transmission,str,0,0.0,2
+Location,str,0,0.0,77
+Color,str,0,0.0,17
+Owner,str,0,0.0,6
+Seller Type,str,0,0.0,3
+Engine,str,80,3.885381253035454,108
+Max Power,str,80,3.885381253035454,335
+Max Torque,str,80,3.885381253035454,290
+Drivetrain,str,136,6.605148130160273,3
+Length,float64,64,3.108305002428363,248
+Width,float64,64,3.108305002428363,170
+Height,float64,64,3.108305002428363,196
+Seating Capacity,float64,64,3.108305002428363,6
+Fuel Tank Capacity,float64,113,5.488101019912579,55

@@ -1,0 +1,12 @@
+{
+  "modelo_elegido": "k-NN",
+  "parametros": {
+    "modelo__n_neighbors": 5,
+    "modelo__weights": "distance"
+  },
+  "train": 1646,
+  "test": 413,
+  "grupos_train": 1272,
+  "grupos_test": 319,
+  "grupos_compartidos": 0
+}
