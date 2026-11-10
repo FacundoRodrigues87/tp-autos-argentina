@@ -44,7 +44,11 @@ LABELS = dict(zip(FEATURES, [
 NUMBER = r"[+-]?\d+(?:[.,]\d+)?"
 AMOUNT = r"(?:U\$S?|USD|US\$|\$)\s*\d"
 FINANCE = r"\b(?:financi\w*|anticipos?|cuotas?)\b"
-PARTIAL = rf"\b(?:anticipo|cuota)\s*(?:de\s+|[:=]\s*)?{AMOUNT}|{AMOUNT}[\d.,]*\s+(?:de\s+)?(?:anticipo|cuota)\b|\bprecio\s+(?:por|de)\s+(?:la\s+)?cuota\b"
+PARTIAL = (
+    rf"\b(?:anticipo|cuota)\s*(?:de\s+|[:=]\s*)?{AMOUNT}"
+    rf"|{AMOUNT}[\d.,]*\s+(?:de\s+)?(?:anticipo|cuota)\b"
+    r"|\bprecio\s+(?:por|de)\s+(?:la\s+)?cuota\b"
+)
 
 
 def cargar():
@@ -79,19 +83,19 @@ def limpiar(raw):
         counts.append({"accion": action, "motivo": reason, "cantidad": int(count),
                        "ids": ", ".join(ids)})
 
-    selected = raw["condition"].eq("Usado") & raw["currency"].eq("USD")
+    def exclude(frame, mask, reason):
+        log("exclusión", reason, mask.sum(), frame.loc[mask, "id"])
+        return frame.loc[~mask].copy()
+
+    used = raw["condition"].eq("Usado")
+    selected = used & raw["currency"].eq("USD")
     log("origen", "Publicaciones en el CSV original", len(raw))
-    log("fuera del alcance", "Usados en ARS", (raw["condition"].eq("Usado") & ~selected).sum())
-    log("fuera del alcance", "Publicaciones de vehículos nuevos", raw["condition"].ne("Usado").sum())
+    log("fuera del alcance", "Usados en ARS", (used & ~selected).sum())
+    log("fuera del alcance", "Publicaciones de vehículos nuevos", (~used).sum())
     d = raw.loc[selected].copy()
     log("selección", "Usados publicados directamente en USD", len(d))
 
-    def exclude(mask, reason):
-        nonlocal d
-        log("exclusión", reason, mask.sum(), d.loc[mask, "id"])
-        d = d.loc[~mask].copy()
-
-    exclude(d["id"].duplicated(), "ID de publicación repetido")
+    d = exclude(d, d["id"].duplicated(), "ID de publicación repetido")
     for field in ["title", "version", *CAT]:
         values = d[field].str.strip()
         d[field] = values.astype(object).where(values.ne(""), np.nan)
@@ -122,24 +126,25 @@ def limpiar(raw):
             invalid.sum(), d.loc[invalid, "id"])
         d.loc[invalid, field] = np.nan
 
-    exclude(~np.isfinite(d["price"]) | d["price"].le(0), "Precio inválido")
-    exclude(~np.isfinite(d["km"]) | d["km"].lt(0), "Kilometraje inválido o negativo")
+    d = exclude(d, ~np.isfinite(d["price"]) | d["price"].le(0), "Precio inválido")
+    d = exclude(d, ~np.isfinite(d["km"]) | d["km"].lt(0), "Kilometraje inválido o negativo")
     valid_year = d["car_year"].between(1886, YEAR) & d["car_year"].mod(1).eq(0)
-    exclude(~valid_year, f"Año de fabricación imposible para el corte de {YEAR}")
+    d = exclude(d, ~valid_year, f"Año de fabricación imposible para el corte de {YEAR}")
     partial = d["title"].str.contains(PARTIAL, case=False, regex=True, na=False)
     finance = d["title"].str.contains(FINANCE, case=False, regex=True, na=False)
-    log("revisión", "Títulos con mención de financiación, anticipo o cuotas", (finance | partial).sum(),
-        d.loc[finance | partial, "id"])
-    exclude(partial, "Importe identificado como anticipo o cuota en el título")
+    mentioned = finance | partial
+    log("revisión", "Títulos con mención de financiación, anticipo o cuotas", mentioned.sum(),
+        d.loc[mentioned, "id"])
+    d = exclude(d, partial, "Importe identificado como anticipo o cuota en el título")
     log("conservación", "Títulos que ofrecen financiación sin identificar el importe como parcial",
-        finance.sum() - (finance & partial).sum())
+        (finance & ~partial).sum())
     log("conservación", "Precios descartados solo por ser extremos", 0)
     log("resultado", "Publicaciones aptas para el análisis", len(d))
     return d.reset_index(drop=True), pd.DataFrame(counts)
 
 
 class VecinosRegresor(RegressorMixin, BaseEstimator):
-    """k-NN euclídeo con desempate reproducible por orden de entrenamiento."""
+    """k-NN euclídeo con el mismo desempate por orden de filas que modelo.js."""
 
     def __init__(self, n_neighbors=5, weights="uniform"):
         self.n_neighbors = n_neighbors
@@ -152,12 +157,14 @@ class VecinosRegresor(RegressorMixin, BaseEstimator):
 
     def neighbors(self, X):
         squared = cdist(X, self.vectors_, metric="sqeuclidean")
+        # La raíz conserva el orden, así que se calcula solo para los vecinos elegidos.
         indices = np.argsort(squared, axis=1, kind="stable")[:, :self.n_neighbors]
         distances = np.sqrt(np.take_along_axis(squared, indices, axis=1))
         weights = np.ones_like(distances)
         if self.weights == "distance":
             zero = distances == 0
             weights = np.divide(1, distances, out=np.zeros_like(distances), where=~zero)
+            # Una coincidencia exacta tiene prioridad sobre cualquier distancia positiva.
             weights = np.where(zero.any(axis=1, keepdims=True), zero, weights)
         weights /= weights.sum(axis=1, keepdims=True)
         return indices, distances, weights
@@ -193,19 +200,20 @@ def separar(d):
     groups = pd.MultiIndex.from_frame(keys).factorize()[0]
     train, test = next(GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEED)
                        .split(d, groups=groups))
-    shared = len(np.intersect1d(groups[train], groups[test]))
+    train_groups, test_groups = groups[train], groups[test]
+    shared = len(np.intersect1d(train_groups, test_groups))
     assert shared == 0
-    folds = list(GroupKFold(n_splits=5).split(d.iloc[train], groups=groups[train]))
+    folds = list(GroupKFold(n_splits=5).split(d.iloc[train], groups=train_groups))
     fold_details = []
     for i, (fit, val) in enumerate(folds, start=1):
-        overlap = len(np.intersect1d(groups[train][fit], groups[train][val]))
+        overlap = len(np.intersect1d(train_groups[fit], train_groups[val]))
         assert overlap == 0
         fold_details.append({"fold": i, "ajuste": len(fit), "validacion": len(val),
                              "grupos_compartidos": overlap})
     detail = {
         "semilla": SEED, "variables_grupo": GROUP,
         "train": len(train), "test": len(test), "fraccion_test": len(test) / len(d),
-        "grupos_train": len(np.unique(groups[train])), "grupos_test": len(np.unique(groups[test])),
+        "grupos_train": len(np.unique(train_groups)), "grupos_test": len(np.unique(test_groups)),
         "grupos_compartidos": shared, "folds": fold_details,
     }
     return Particiones(d.iloc[train].reset_index(drop=True),
@@ -213,6 +221,9 @@ def separar(d):
 
 
 def seleccionar(partitions):
+    """Compara el MAE de validación y reajusta cada finalista solo con train."""
+    X_train = partitions.train[FEATURES]
+    y_train = partitions.train["price"]
     choices = {
         "Baseline mediana": (DummyRegressor(strategy="median"), {}),
         "Regresión lineal": (LinearRegression(), {}),
@@ -225,12 +236,12 @@ def seleccionar(partitions):
         pipeline = Pipeline([("preparar", preprocesador()), ("modelo", model)])
         search = GridSearchCV(pipeline, grid, cv=partitions.folds,
                               scoring="neg_mean_absolute_error", error_score="raise")
-        search.fit(partitions.train[FEATURES], partitions.train["price"])
+        search.fit(X_train, y_train)
         searches[name] = search
         for i, params in enumerate(search.cv_results_["params"]):
             fold_scores = {
                 f"MAE_fold_{fold + 1}": -search.cv_results_[f"split{fold}_test_score"][i]
-                for fold in range(5)
+                for fold in range(search.n_splits_)
             }
             rows.append({"modelo": name, "vecinos": params.get("modelo__n_neighbors"),
                          "pesos": params.get("modelo__weights"),
@@ -241,17 +252,19 @@ def seleccionar(partitions):
 
 def evaluar(partitions, winner, searches):
     test = partitions.test
+    X_test = test[FEATURES]
+    y_test = test["price"]
     rows = []
     cases = test[["id", *FEATURES, "version", "price"]].copy()
     for name, search in searches.items():
-        pred = search.predict(test[FEATURES])
+        pred = search.predict(X_test)
         if name == winner:
             cases["precio_estimado"] = pred
         rows.append({
             "modelo": name, "MAE_CV": -search.best_score_,
-            "MAE_test": mean_absolute_error(test["price"], pred),
-            "RMSE_test": root_mean_squared_error(test["price"], pred),
-            "R2_test": r2_score(test["price"], pred), "elegido_por_CV": name == winner,
+            "MAE_test": mean_absolute_error(y_test, pred),
+            "RMSE_test": root_mean_squared_error(y_test, pred),
+            "R2_test": r2_score(y_test, pred), "elegido_por_CV": name == winner,
         })
     cases["error"] = cases["precio_estimado"] - cases["price"]
     cases["error_abs"] = cases["error"].abs()
