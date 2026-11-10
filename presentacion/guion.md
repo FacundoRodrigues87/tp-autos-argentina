@@ -1,54 +1,199 @@
-# Guion de exposición
+# Guion para la defensa del TP
 
-El proyecto estima **precios de publicación de usados en USD**. La presentación acompaña al notebook; el notebook contiene el análisis y es el entregable principal. Fuente de la consigna: **PY-002**, [Word original](../docs/consigna.docx), P006, P016–P026 y P028–P039. La defensa pide 20–25 minutos con preguntas y que todos puedan explicar cualquier parte (P033–P034).
+Este es el texto para practicar la exposición siguiendo las 13 secciones del HTML. Las indicaciones **Mostrar** son acciones, no frases para leer. Se reparte en seis bloques: 19 minutos de exposición y demostración, más 3–5 minutos para preguntas. Los tiempos son objetivos de ensayo; no se alcanzan leyendo solamente el texto. Asignen un nombre a cada bloque.
 
-Conservamos seis integrantes, sin asignar nombres. Los bloques suman **19 minutos**; reservar 3–5 minutos para preguntas da 22–24 minutos. Ensayar el recorrido y ajustar el ritmo, sin convertir los tiempos sugeridos en criterios de evaluación.
+El vocabulario y los conceptos del discurso se apoyan en la [revisión del material de clase](../docs/alineacion-materia.md): carga de datos, limpieza, estadística descriptiva, gráficos, agrupaciones, regresión, vecinos, escalado, validación y métricas. El código tiene algunas decisiones adicionales cuya cobertura en clase no está acreditada. No se presentan como temas vistos: quedan documentadas en esa revisión y en la guía de defensa para responder con honestidad si el docente las pregunta.
 
-**Control de integración:** el notebook y los CSV se regeneraron con cinco folds por grupos mezclados con semilla 42. Se guardan los IDs de cada fold. El MAE de CV de k-NN es USD 1.536,72; reemplaza el valor de la versión anterior porque cambió el reparto interno de validación. El test y sus predicciones se conservan. Ver [integración y pruebas](../docs/integracion-defensa.md).
+## Integrante 1 — Problema y datos — 3 minutos
 
-## Integrante 1 · Secciones 1 a 3 · 3 min
+### 1. Portada
 
-1. **Portada.** «Queremos ayudar a poner un precio de publicación a un usado. Estimamos un número en dólares a partir de sus características». Aclarar desde el comienzo que son avisos históricos, con actualización del dataset en febrero de 2024.
-2. **Problema.** Comparar solo por modelo no alcanza: importan año, kilómetros y características. La variable objetivo es `price`, el importe pedido. Estado, mantenimiento, negociación y precio final de venta no están registrados para este uso. El sistema actual estima precios; no recomienda autos según preferencias.
-3. **Datos.** Una fila es un aviso. Ariel Rasgido reunió publicaciones mediante la API pública de Mercado Libre Argentina y publicó el dataset en Kaggle. El original tiene 10.191 filas y 25 columnas. Elegimos usados ya publicados en USD: 4.047 filas. No convertimos los avisos en pesos con un tipo de cambio actual. Después de limpiar quedan 4.044. `X` contiene seis números y cinco categorías; `y`, el precio. La versión se usa para agrupar, no como predictor.
+**Decir:**
 
-**Transición:** «Antes de comparar modelos, revisamos qué significaban los datos y qué errores traían».
+“Para este trabajo nos planteamos una pregunta: ¿qué precio de publicación podría tener un auto usado según sus características? Trabajamos con avisos de Mercado Libre Argentina y usamos Python para revisar los datos, analizarlos y comparar modelos que estiman ese precio.
 
-## Integrante 2 · Secciones 4 a 6 · 4 min
+El resultado es una referencia basada en los avisos del dataset. No es el precio al que finalmente se vendió el auto ni una cotización actual.”
 
-4. **Limpieza.** Explicar las tres exclusiones: una repetición de ID, el Corsa con año imposible y un Fiat Uno cuyo importe era un anticipo. El duplicado mantiene una contradicción: el campo dice Ka y el título Focus III. Deduplicar no corrige esa inconsistencia. Los otros 23 títulos que ofrecen financiación permanecen. Una especificación imposible pasa a faltante; no siempre elimina la fila. Mostrar «1.6 110CV» → 1,6 L y las 60.252 puertas → faltante. Los precios extremos no se descartaron solo por ser extremos.
-5. **Distribución.** La mediana de la muestra limpia es USD 8.700 y la media, aproximadamente USD 10.896. La mitad central está entre USD 6.100 y USD 13.000. La cola de precios altos eleva la media. Abrir el detalle del notebook si preguntan por los boxplots. Esos puntos alejados de los cuartiles no equivalen automáticamente a errores de carga.
-6. **Relaciones.** Alternar año, kilómetros y potencia. Señalar que a un mismo año hay precios muy diferentes: asociación no implica una regla exacta ni causalidad. En el detalle están el mapa de correlaciones y el barplot con `groupby + agg`. La tabla incluye cuántos avisos aporta cada marca; sus medianas mezclan modelos y edades diferentes.
+### 2. Qué queremos predecir
 
-**Transición:** «Con estas variables probamos si un modelo mejora una referencia sencilla».
+**Mostrar:** la pregunta del proyecto y las características del vehículo.
 
-## Integrante 3 · Secciones 7 y 8 · 3 min
+**Decir:**
 
-7. **Algoritmos.** El baseline predice siempre la mediana **del entrenamiento**, USD 8.500; no es la mediana de USD 8.700 de la muestra completa. La regresión lineal suma un intercepto y contribuciones aprendidas. k-NN busca fichas próximas y promedia sus precios. Se evaluaron ocho configuraciones: baseline, lineal y seis k-NN (5, 15 y 35 vecinos, con pesos uniformes o por distancia). En la ejecución integrada ganó k-NN con 5 y distancia, MAE de CV USD 1.536,72. Los cinco folds mezclan grupos con semilla 42; sus IDs están registrados para repetir el reparto.
-8. **Separación.** Primero se reservan 831 avisos para prueba y quedan 3.213 para entrenamiento: 20,55 % y 79,45 %. Marca, modelo, versión y año forman un grupo que no se reparte entre ambos. Dentro de entrenamiento se usa validación cruzada agrupada de cinco folds. Cambiar el fold: unas 2.570 filas ajustan y unas 643 validan. En cada ajuste se aprenden medianas, modas, escalas y categorías. El test no decide el modelo. La separación es aleatoria por grupos, no una prueba sobre un período futuro.
+“Es un problema de regresión porque queremos obtener un número: el precio en dólares. Esa es nuestra variable objetivo. Para estimarla usamos información del auto, como año, kilómetros, marca, modelo, combustible y transmisión.
 
-**Transición:** «Veamos qué significa comparar fichas cercanas».
+La idea es comprobar si usar esas características permite estimar mejor que dar siempre un mismo precio. También queremos entender en qué casos la estimación se equivoca más.”
 
-## Integrante 4 · Sección 9 · 2 min
+### 3. De dónde salen los datos
 
-9. **Vecinos.** Revelar las cinco filas. La ficha de demostración proviene de entrenamiento y omite los opcionales; sirve para explicar el mecanismo, no para medir generalización. Los números faltantes reciben medianas y la tracción, la moda del entrenamiento. Después se estandariza cada número restando su media y dividiendo por su desviación. Las categorías pasan a indicadores 0/1. Así kilómetros no domina por tener números grandes.
+**Mostrar:** fuente, cantidad de filas y columnas.
 
-   La distancia es euclídea sobre ese vector. El peso parte de `1 / distancia` y luego se divide por la suma de los pesos. Cada aporte es precio del vecino × peso normalizado; se suman los aportes sin redondear. Si hay distancia cero, solo las coincidencias exactas entre los vecinos elegidos reciben peso. Los empates conservan el orden de entrenamiento. Una categoría igual suma cercanía; no obliga a que todos los vecinos sean de la misma marca o modelo.
+**Decir:**
 
-**Transición:** «El ejemplo muestra cómo calcula; la prueba reservada muestra cuánto se equivoca».
+“El dataset es público y está publicado en Kaggle por Ariel Rasgido. Cada fila representa un aviso y cada columna una característica. El archivo original tiene 10.191 filas y 25 columnas; incluye números y categorías.
 
-## Integrante 5 · Secciones 10 y 11 · 4 min
+Elegimos autos usados publicados directamente en dólares para comparar importes en la misma moneda. No mezclamos pesos y dólares ni convertimos avisos históricos con una cotización de hoy. Ese recorte tiene 4.047 avisos antes de la limpieza. La versión del dataset es de febrero de 2024.
 
-10. **Métricas.** Alternar MAE, RMSE y R². En los 831 avisos de prueba, k-NN obtuvo **MAE USD 1.499,30**, **RMSE USD 2.735,57** y **R² 0,9061**. MAE es el error absoluto promedio; RMSE amplifica los errores grandes. Ambos están en USD. R² compara el error cuadrático con el de predecir la media de ese test: puede ser negativo y no significa «90,61 % de aciertos». El baseline tuvo MAE USD 5.502,45; el de k-NN fue aproximadamente 72,8 % menor. No presentar el MAE como un intervalo garantizado para un auto particular.
-11. **Errores.** Seleccionar el Fiat Uno 1994, publicado a USD 29.000 y estimado cerca de USD 7.517: subestimación de unos USD 21.483. Es distinto del Uno excluido por anticipo. Se conservó porque no hubo evidencia suficiente para quitarlo por precio. El tramo alto tuvo MAE USD 2.659,07 con 292 avisos; el bajo, USD 789,89 con 245. Los cortes USD 6.800 y USD 11.000 se calcularon en entrenamiento. El sesgo es estimado menos publicado; negativo indica subestimación promedio. La antigüedad se calcula respecto de 2024, no del día de la defensa.
+Cargamos el CSV con pandas. La fuente y las instrucciones para ejecutar el trabajo están en el notebook.”
 
-**Transición:** «Con esas limitaciones claras podemos usar el estimador como referencia».
+**Transición:** “Antes de analizar precios, revisamos la calidad de esos datos.”
 
-## Integrante 6 · Secciones 12 y 13 · 3 min
+## Integrante 2 — Limpieza y análisis exploratorio — 4 minutos
 
-12. **Estimador.** Leer primero «Cómo funciona esta estimación», visible sin completar la ficha. Cargar **manualmente** Volkswagen / Up! / 2014 / 108000 km / Nafta / Manual, con los cinco opcionales vacíos. Pulsar «Estimar precio»: **USD 7.927,05** en esta base. También se puede elegir la segunda ficha del selector, el mismo Up! sin opcionales. Las fichas se fijaron por ID para repetir la demostración. Abrir los vecinos. Cambiar kilómetros: el importe anterior desaparece y hay que volver a estimar. Mostrar una entrada inválida o «Limpiar ficha» si el tiempo alcanza. El detalle técnico incorpora un fragmento real de `src/autos.py`, no pseudocódigo.
+### 4. Limpieza
 
-   Python limpia, entrena y evalúa; `presentacion/exportar.py` copia parámetros y resultados al HTML; `presentacion/modelo.js` calcula en el navegador. Sin API, reentrenamiento ni consulta de precios actuales durante la demostración.
-13. **Cierre.** «El modelo mejora al baseline en este test y aporta una referencia de precios pedidos históricos. Vimos errores mayores en segmentos caros y recientes. Para mejorar proponemos registrar estado e historial, revisar contradicciones y evaluar con datos nuevos». Son propuestas, no mejoras ya implementadas ni resultados prometidos. La ficha de la fuente, licencia declarada y huella del CSV están al final.
+**Mostrar:** resumen de limpieza y un ejemplo de conversión.
 
-Dejar [la guía de demostración y preguntas](../docs/demostracion-presentacion.md) a mano. Todos deben poder explicar baseline, separación, preprocesamiento y límites, aunque hayan expuesto otro bloque.
+**Decir:**
+
+“Revisamos los tipos de datos, los valores vacíos, los duplicados y los valores que no tenían sentido. Algunos números venían como texto acompañado de unidades, así que los convertimos para poder calcular.
+
+Quitamos una repetición de un aviso, un registro con un año imposible y otro cuyo precio era un anticipo, no el precio completo. Después de estas exclusiones quedaron 4.044 avisos.
+
+Si una característica opcional tenía un valor imposible, la dejamos como faltante. Por ejemplo, un auto no puede tener 60.252 puertas. Para las características faltantes usamos la mediana cuando son numéricas y el valor más frecuente cuando son categorías, tomando esos valores de los datos de entrenamiento.
+
+No eliminamos un precio solo por ser muy alto o muy bajo: un valor extremo puede ser real. También registramos las decisiones para poder explicar qué cambió.”
+
+### 5. Cómo se distribuyen los datos
+
+**Mostrar:** histograma de precios; abrir también histogramas y boxplots del notebook.
+
+**Decir:**
+
+“Calculamos medidas descriptivas y usamos gráficos para entender la muestra. El histograma permite ver en qué intervalos se concentran los precios. La mediana es de 8.700 dólares y la media es de aproximadamente 10.896. La media es mayor porque los precios altos la empujan hacia arriba.
+
+La mitad central de los avisos está entre 6.100 y 13.000 dólares. El boxplot ayuda a ver esa parte central y los valores más alejados. Hicimos el mismo tipo de revisión para los kilómetros.
+
+Estas medidas describen nuestra muestra; no representan necesariamente a todos los autos del país.”
+
+### 6. Relaciones y agrupaciones
+
+**Mostrar:** dispersión por año y kilómetros; mapa de correlaciones y barras por marca en el detalle.
+
+**Decir:**
+
+“Después analizamos las variables de a pares. Cada punto del gráfico representa un aviso. Comparamos el precio con el año y con los kilómetros. Para un mismo año podemos ver distintos precios: una sola característica no alcanza para explicar todo.
+
+La correlación resume la dirección y la intensidad de una relación lineal. Una asociación no demuestra que una variable cause el precio.
+
+También usamos groupby y agg para agrupar por marca y por modelo y calcular cantidad de avisos, media y mediana. El gráfico de barras compara las medianas por marca. Hay que mirar también cuántos avisos tiene cada grupo, porque las marcas incluyen distintos modelos y edades.
+
+No hicimos una serie temporal: el año es el de fabricación del auto, no la fecha del aviso. No permite saber cómo cambió el precio a lo largo del tiempo.”
+
+**Transición:** “Con los datos revisados, pasamos a comparar modelos.”
+
+## Integrante 3 — Modelos y evaluación — 3 minutos
+
+### 7. Qué modelos comparamos
+
+**Mostrar:** referencia simple, regresión lineal y k-NN.
+
+**Decir:**
+
+“Primero usamos una referencia sencilla, o baseline: estimar siempre la mediana de los precios de entrenamiento, que es de 8.500 dólares. Sirve para comprobar si un modelo más elaborado aporta una mejora.
+
+Probamos regresión lineal, que relaciona las características con el precio mediante una combinación de sus valores. También probamos k-NN, que busca autos cercanos según las características y combina sus precios.
+
+En k-NN probamos 5, 15 y 35 vecinos. Comparamos darles el mismo peso o dar más importancia a los más cercanos. La elección fue cinco vecinos con mayor peso para los cercanos, porque obtuvo el menor error promedio de validación.”
+
+### 8. Cómo separamos y validamos
+
+**Mostrar:** entrenamiento, prueba y una ronda de validación.
+
+**Decir:**
+
+“Separamos 3.213 avisos para entrenamiento y 831 para prueba, aproximadamente el 80 y el 20 por ciento. El entrenamiento sirve para ajustar los modelos. La prueba permite evaluar después cómo funcionan con avisos que no se usaron para ajustarlos.
+
+Para elegir entre las opciones usamos validación cruzada dentro del entrenamiento: lo dividimos en cinco partes y vamos alternando cuál se usa para validar. Comparamos el error promedio de esas rondas. Esto permite elegir sin usar la prueba para decidir qué modelo queda.
+
+Los valores con los que completamos faltantes y ajustamos las escalas se calculan usando solamente la parte de entrenamiento que corresponde en cada ronda.”
+
+**Transición:** “Ahora vamos a mostrar con un ejemplo cómo funcionan los vecinos.”
+
+## Integrante 4 — Cómo estima k-NN — 2 minutos
+
+### 9. Los cinco vecinos
+
+**Mostrar:** revelar los cinco vecinos y señalar sus precios y aportes.
+
+**Decir:**
+
+“Para estimar el precio, k-NN compara las características del auto ingresado con las de los autos de entrenamiento. Elige los cinco más cercanos y combina sus precios. Los más cercanos tienen mayor importancia en el resultado.
+
+Antes de comparar, ajustamos la escala de los números. Los kilómetros pueden tener valores de cientos de miles y otras características valores mucho más chicos. Sin escalado, el tamaño de los números podría dominar la comparación.
+
+En esta tabla vemos cuáles son los vecinos y cómo participan en la estimación. Parecido no significa idéntico: pueden diferir en varias características.
+
+Esta ficha es un ejemplo para entender el funcionamiento. Para saber cuánto se equivoca el modelo tenemos que mirar los resultados de prueba, no este ejemplo.”
+
+**Transición:** “Veamos entonces qué pasó con los 831 avisos que reservamos.”
+
+## Integrante 5 — Resultados y errores — 4 minutos
+
+### 10. Métricas
+
+**Mostrar:** alternar MAE, RMSE y R²; comparar los tres modelos.
+
+**Decir:**
+
+“Usamos tres medidas para evaluar. El MAE es el promedio de los errores absolutos: mide cuánto nos alejamos del precio publicado, sin importar si fue por arriba o por abajo. El modelo elegido obtuvo un MAE de 1.499,30 dólares.
+
+El RMSE da más importancia a los errores grandes. Dio 2.735,57 dólares. Que sea mayor que el MAE nos ayuda a ver que hay casos con errores importantes.
+
+El R² compara el error cuadrático del modelo con el de usar la media del conjunto evaluado. Obtuvimos 0,9061. No significa que acertamos el 90,61 por ciento de los precios.
+
+La referencia que siempre estima la mediana tuvo un MAE de 5.502,45 dólares. k-NN redujo ese error aproximadamente un 72,8 por ciento en esta prueba.
+
+El MAE es un promedio del conjunto: no garantiza que cada estimación se equivoque menos de 1.499 dólares.”
+
+### 11. Dónde falla
+
+**Mostrar:** gráfico de precio publicado frente a estimado, segmentos y caso del Fiat Uno.
+
+**Decir:**
+
+“En este gráfico, cuanto más cerca está un punto de la diagonal, más cerca está la estimación del precio publicado. Los puntos alejados muestran errores mayores.
+
+No nos quedamos solo con un promedio general: agrupamos los errores por marca, antigüedad y nivel de precio. Los avisos del tramo de precios altos tuvieron más error promedio que los del tramo bajo.
+
+Un ejemplo es un Fiat Uno de 1994 publicado a 29.000 dólares que el modelo estimó cerca de 7.517. Es un error grande. Lo conservamos porque no teníamos evidencia suficiente para decir que el precio era un error de carga. Es un aviso distinto del que excluimos por indicar un anticipo.
+
+El modelo usa las características disponibles. No conoce el estado real del auto, el mantenimiento ni otras condiciones que podrían ayudar a explicar un caso particular.”
+
+**Transición:** “Con esos resultados y límites claros, mostramos la herramienta.”
+
+## Integrante 6 — Demostración y cierre — 3 minutos
+
+### 12. Uso del estimador
+
+**Mostrar:** ingresar Volkswagen, Up!, año 2014, 108000 km, Nafta y Manual. Dejar vacíos los campos opcionales. Pulsar Estimar precio y abrir los vecinos.
+
+**Decir:**
+
+“Ingresamos las características del auto. Los campos opcionales pueden quedar vacíos; en ese caso se completan con los valores calculados durante el entrenamiento.
+
+Para este ejemplo obtenemos 7.927,05 dólares. Podemos ver los autos utilizados como referencia. Si cambiamos un dato, tenemos que volver a estimar.
+
+La herramienta permite usar el modelo que analizamos en el notebook. Funciona sin conexión y no está buscando avisos ni precios actuales mientras la usamos.”
+
+**Mostrar:** cambiar kilómetros y volver a estimar. Señalar el nuevo resultado sin anticipar una cifra ni asegurar que siempre aumentará o bajará.
+
+### 13. Conclusiones
+
+**Decir:**
+
+“Partimos de un dataset público, revisamos su calidad, limpiamos los datos y los exploramos con estadísticas, agrupaciones y gráficos. Después comparamos una referencia simple con regresión lineal y k-NN.
+
+El modelo de cinco vecinos logró el menor error de validación y mejoró la referencia en la prueba reservada. También encontramos errores importantes, especialmente en algunos avisos caros.
+
+El resultado es una referencia sobre precios publicados históricos. Para mejorar el trabajo incorporaríamos información del estado del vehículo, mantenimiento y avisos más recientes. Para estimar el precio realmente pagado necesitaríamos datos de ventas.
+
+El notebook, el dataset, la fuente y las instrucciones están en el repositorio. Con esto cerramos la presentación y quedamos disponibles para las preguntas.”
+
+## Preparación del grupo — no leer en la exposición
+
+- Practicar con el HTML abierto: señalar los gráficos y explicar lo que se ve. No memorizar cifras sin entenderlas.
+- Todos deben poder explicar la variable objetivo, un ejemplo de limpieza, media y mediana, un gráfico, la separación de datos, la referencia simple, k-NN y las tres métricas.
+- Ensayar las transiciones y cronometrar el recorrido completo. Reservar las preguntas dentro de los 25 minutos.
+- Confirmar la modalidad para seis integrantes y el acceso del docente al repositorio privado.
+- El discurso evita detalles de programación web y de las clases auxiliares. Eso no elimina esas partes del código. Si el docente pregunta por una decisión adicional, consultar la [guía de defensa](../docs/guia_defensa.md) y distinguir lo trabajado en clase de las adaptaciones del proyecto; no afirmar que se vio algo sin respaldo.

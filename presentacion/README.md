@@ -25,7 +25,7 @@ python tests/preparar_modelo_presentacion.py --salida /tmp/autos-defensa/modelo.
 python -m presentacion.exportar --modelo /tmp/autos-defensa/modelo.joblib
 ```
 
-El primer comando verifica el ganador y las 831 predicciones de test contra los CSV. Además escribe un informe junto al modelo temporal. **En esta revisión los MAE de CV no se reprodujeron exactamente**, aunque sí el ganador y el test. El HTML conserva las cifras de los CSV y lo aclara al abrir las configuraciones. La revisión de Python debe conciliarlo antes de cerrar la entrega; ver evidencia y versiones en el handoff. En Windows, reemplazar `/tmp/...` por una carpeta temporal propia.
+El primer comando verifica el ganador y las 831 predicciones de test contra los CSV. Además escribe un informe junto al modelo temporal. La integración concilió la validación cruzada: cinco folds por grupos con mezcla y semilla 42, cuyos IDs quedan guardados. MAE CV de k-NN: USD 1.536,72. El test conserva sus 831 predicciones. Ver [integración y reproducción](../docs/integracion-defensa.md). En Windows, reemplazar `/tmp/...` por una carpeta temporal propia.
 
 Las tres fichas de demostración conservan los IDs de la presentación base. `demo_examples` toma sus valores del entrenamiento, en lugar de elegirlos según el orden de autos con kilómetros empatados.
 

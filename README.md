@@ -33,3 +33,9 @@ En macOS o Linux, creá el entorno con `python3.12 -m venv .venv` y usá `.venv/
 ## Validación cruzada integrada
 
 Se reemplazó el reparto interno sin mezcla por GroupKFold con shuffle=True y semilla 42, manteniendo el test reservado. El nuevo MAE CV de k-NN es USD 1.536,72. El modelo elegido y las 831 predicciones de prueba se conservan. Los IDs guardados permiten detectar diferencias reales entre entornos; la discrepancia histórica no se oculta sustituyendo números en el HTML.
+
+## Entrega y defensa
+
+Entregar el enlace al repositorio y comprobar que el docente pueda abrirlo: actualmente es privado. Si se entrega un archivo, el notebook necesita también el código, el CSV y los metadatos del proyecto. La fuente pública y las instrucciones están en el notebook.
+
+El guion reserva 19 minutos de exposición y 3–5 de preguntas (22–24 en total). Asignar los seis bloques a nombres reales y confirmar la excepción para seis integrantes. Todos deben poder explicar cualquier parte, no solo su bloque. Consultar la [revisión de entrega](docs/auditoria-entrega.md).
