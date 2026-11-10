@@ -1,12 +1,56 @@
 {
+  "semilla": 42,
+  "variables_grupo": [
+    "brand",
+    "model",
+    "version",
+    "car_year"
+  ],
+  "train": 3213,
+  "test": 831,
+  "fraccion_test": 0.20548961424332343,
+  "grupos_train": 1576,
+  "grupos_test": 394,
+  "grupos_compartidos": 0,
+  "folds": [
+    {
+      "fold": 1,
+      "ajuste": 2570,
+      "validacion": 643,
+      "grupos_compartidos": 0
+    },
+    {
+      "fold": 2,
+      "ajuste": 2570,
+      "validacion": 643,
+      "grupos_compartidos": 0
+    },
+    {
+      "fold": 3,
+      "ajuste": 2570,
+      "validacion": 643,
+      "grupos_compartidos": 0
+    },
+    {
+      "fold": 4,
+      "ajuste": 2571,
+      "validacion": 642,
+      "grupos_compartidos": 0
+    },
+    {
+      "fold": 5,
+      "ajuste": 2571,
+      "validacion": 642,
+      "grupos_compartidos": 0
+    }
+  ],
   "modelo_elegido": "k-NN",
   "parametros": {
     "modelo__n_neighbors": 5,
     "modelo__weights": "distance"
   },
-  "train": 1646,
-  "test": 413,
-  "grupos_train": 1272,
-  "grupos_test": 319,
-  "grupos_compartidos": 0
+  "cortes_precio_USD": [
+    6800.0,
+    11000.0
+  ]
 }

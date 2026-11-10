@@ -1,31 +1,29 @@
-# Autos usados: predicción de precios y recomendaciones
+# ¿Qué precio le pongo a mi auto usado?
 
-TP integrador de Python para Ciencia de Datos, UADE. El objetivo es estimar el precio de un auto y ofrecer un ranking que respete presupuesto, plazas y preferencias. El notebook explica el análisis antes de cada bloque de código.
+TP integrador de Python para Ciencia de Datos, UADE. Estimamos en USD el precio de publicación de un vehículo usado a partir de avisos históricos de Mercado Libre Argentina.
 
-## Datos y alcance
+- [TP_autos.ipynb](TP_autos.ipynb) contiene el análisis ejecutado. El [guion](presentacion/guion.md) distribuye la exposición entre seis integrantes.
+- [Datos y limpieza](docs/seleccion_dataset.md) documenta la procedencia y las reglas aplicadas. [Validación](docs/validacion.md) reúne los controles de entrega.
 
-El dataset principal es Vehicle dataset, archivo `car details v4.csv`: 2.059 avisos y 20 columnas del mercado de India. El nombre inicial del repositorio conserva “argentina” porque el proyecto comenzó con un CSV argentino; ese archivo queda como piloto y no se mezcla con el principal. No se presentan estos datos como precios argentinos actuales. La moneda de Price está pendiente de confirmación: los presupuestos se expresan en las mismas unidades del archivo.
+El CSV de origen contiene 10.191 avisos y 25 columnas. El recorte de usados en USD tiene 4.047 filas antes de limpiar y 4.044 después. Ganó **k-NN con 5 vecinos ponderados por distancia**. En los 831 avisos de prueba obtuvo **MAE de USD 1.499,30**, **RMSE de USD 2.735,57** y **R² de 0,9061**. Las métricas comparan la estimación con el precio pedido en la muestra histórica.
 
-Fuente: https://www.kaggle.com/datasets/nehalbirla/vehicle-dataset-from-cardekho . Ver comparación, licencia, huella y límites en `docs/seleccion_dataset.md` y metadata original en `docs/dataset_metadata.json`. La consigna está en `docs/consigna.docx`.
+## Reproducir en Windows
 
-## Ejecutar
+Desde la carpeta del proyecto, con Python 3.11:
 
-Con Python 3.12:
-
-```sh
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-jupyter nbconvert --execute --to notebook --inplace TP_autos.ipynb
-python recomendar.py --presupuesto 800000 --plazas 5 --caja Manual --km-max 100000
+```powershell
+py -3.11 -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m nbconvert --execute --to notebook --inplace TP_autos.ipynb
+.venv/Scripts/python.exe estimar.py --marca Volkswagen --modelo 'Up!' --anio 2014 --km 108000 --combustible Nafta --transmision Manual
+.venv/Scripts/python.exe -m presentacion.exportar
 ```
 
-Abrir `TP_autos.ipynb` en Jupyter, VS Code o Colab. En Colab subir también `src/autos.py` y `data/raw/car_details_v4.csv` conservando las carpetas. Los CSV de resultados y los gráficos se regeneran al ejecutar.
+En macOS o Linux, creá el entorno con `python3.11 -m venv .venv` y usá `.venv/bin/python` en los demás comandos. El notebook escribe las tablas, los gráficos y el modelo local en `resultados/`. Podés consultar los campos opcionales del estimador con `estimar.py --help`.
 
-## Qué incluye
+## Archivos de resultados
 
-Calidad y limpieza, estadística descriptiva, histogramas y boxplots, dispersión y correlación, groupby y agg, baseline, regresión lineal y k-NN. Separación por grupos y validación cruzada dentro de entrenamiento. MAE, RMSE y R² en test. Recomendador con filtros y puntajes explicados y ejemplos comprobables.
-
-No hay fechas individuales de aviso; no se fabrica una serie temporal a partir del año del auto. La predicción de precio se evalúa por separado de la relevancia del ranking. El catálogo de demostración corresponde a test; sus precios no se utilizaron al entrenar el modelo.
-
-Todos los integrantes deben revisar las decisiones y poder explicar cualquier parte. Pendientes: corroborar moneda, revisar elección con el instructor y personalizar casos de uso y defensa con el grupo. No hay invitaciones enviadas todavía.
+- `calidad.csv` registra motivos, cantidades e IDs en las reglas de auditoría.
+- `particiones.json` describe la separación y los cinco folds.
+- `validacion_cruzada.csv` contiene las ocho configuraciones y el MAE de cada fold.
+- `metricas.csv`, `catalogo_evaluacion.csv` y `errores_segmentos.csv` contienen las métricas, las predicciones individuales de prueba y sus desgloses.
