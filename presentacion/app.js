@@ -22,7 +22,7 @@ function selectOptions(element, entries) {
 function table(labels, rows) {
   const heading = labels.map(label => '<th scope="col">' + safe(label) + "</th>").join("");
   const body = rows.map(row => "<tr>" + row.map(value => "<td>" + safe(value) + "</td>").join("") + "</tr>").join("");
-  return '<div class="table-wrap"><table><thead><tr>' + heading + "</tr></thead><tbody>" + body + "</tbody></table></div>";
+  return '<div class="table-wrap" tabindex="0" role="region" aria-label="Tabla: ' + safe(labels.join(', ')) + '. Desplazamiento horizontal disponible."' + '><table><thead><tr>' + heading + "</tr></thead><tbody>" + body + "</tbody></table></div>";
 }
 
 function stats(entries) {
@@ -75,9 +75,9 @@ const series = (lo, hi, count) => Array.from({length: count}, (_, i) => lo + (hi
 
 function graph(element, config) {
   const width = element.clientWidth;
-  const height = 294;
+  const height = width < 440 ? 304 : 330;
   const left = 57;
-  const right = width - 17;
+  const right = width - 30;
   const top = 22;
   const bottom = height - 54;
   const [xmin, xmax] = config.x;
@@ -90,7 +90,9 @@ function graph(element, config) {
     '" x2="' + x2 + '" y2="' + y2 + '"/>';
   const label = (value, tx, ty, align, className = "tick") => '<text class="' + className + '" x="' + tx +
     '" y="' + ty + '" text-anchor="' + align + '">' + safe(value) + "</text>";
-  const xt = config.xt ?? series(xmin, xmax, width < 440 ? 4 : 5);
+  const allTicks = config.xt ?? series(xmin, xmax, 5);
+  const xt = width < 360 && allTicks.length > 4
+    ? [allTicks[0], allTicks[Math.floor(allTicks.length / 2)], allTicks.at(-1)] : allTicks;
   const yt = config.yt ?? series(ymin, ymax, 5);
   const gx = xt.map(value => label((config.formatX ?? compactTick)(value), x(value), bottom + 19, "middle")).join("");
   const gy = yt.map(value => line(left, y(value), right, y(value), "gridline") +
@@ -181,7 +183,7 @@ function neighborValues(row) {
   return [vehicleName(car) + " · " + num(car.km) + " km", dec(row.distance), percent(row.weight),
     num(row.price), num(row.contribution)];
 }
-const demoVehicle = data.examples[1].vehiculo;
+const demoVehicle = (data.examples.find(({vehiculo}) => formOptionalMissing(vehiculo).length) ?? data.examples[0]).vehiculo;
 const demo = predecir(demoVehicle, knn);
 byId("neighbor-intro").textContent = vehicleName(demoVehicle) + " · " + num(demoVehicle.km) +
   " km. Usamos una ficha de entrenamiento con especificaciones opcionales faltantes para ver la búsqueda." +
@@ -210,7 +212,7 @@ function showMetric() {
   const explain = {
     MAE_test: "El MAE mide cuánto se desvía, en promedio, la estimación del precio publicado.",
     RMSE_test: "El RMSE da más peso a las diferencias grandes y se expresa en USD.",
-    R2_test: "R² compara el error cuadrático con el de usar la media observada de prueba. Puede ser negativo.",
+    R2_test: "R² compara el error cuadrático con el de usar la media observada de prueba: 1 sería ajuste perfecto, 0 equivale a esa referencia y puede ser negativo. No es un porcentaje de aciertos.",
   };
   byId("metric-copy").textContent = explain[field];
   const values = data.metrics.map(row => row[field]);
@@ -220,7 +222,7 @@ function showMetric() {
   const zero = position(0);
   byId("metric-chart").innerHTML = data.metrics.map(row => {
     const bar = position(row[field]);
-    const label = field === "R2_test" ? dec(row[field]) : usd(row[field]);
+    const label = field === "R2_test" ? r2.format(row[field]) : usd(row[field]);
     return '<div class="bar-row animate"><div class="bar-label"><span>' + safe(row.modelo) +
       (row.elegido_por_CV ? " · elegido" : "") + '</span><span class="number">' + label +
       '</span></div><div class="bar-track" aria-hidden="true"><i class="' + (row.elegido_por_CV ? "" : "secondary-bar") +
@@ -264,45 +266,66 @@ showSegments();
 const formFields = ["brand", "model", "car_year", "km", "fuel_type", "transmission",
   "engine_l", "power_hp", "doors", "passenger_capacity", "traction_control"];
 
+function formOptionalMissing(vehicle) {
+  return Object.keys(options.etiquetas).filter(field => !options.obligatorios.includes(field) && vehicle[field] == null);
+}
+
 function formField(field) {
   const required = options.obligatorios.includes(field);
-  const type = required ? " required" : "";
-  const attrs = ' id="' + field + '" name="' + field + '" aria-describedby="error-' + field + '"' + type;
+  const attrs = ' id="' + field + '" name="' + field + '" aria-describedby="hint-' + field + ' error-' + field + '"' +
+    (required ? ' required' : '');
   const range = options.rangos[field];
+  const isInteger = options.enteros.includes(field);
+  const hint = range
+    ? (field === 'car_year' ? String(range[0]) : tickNumber.format(range[0])) + ' a ' + (field === 'car_year' ? String(range[1]) : num(range[1])) +
+      (isInteger ? '. Entero, sin separadores de miles.' : '. Solo el número, sin unidades.')
+    : field === 'model' ? 'Opciones de la marca elegida en entrenamiento.' : required ? '' : 'Sin dato: se completa con la moda de entrenamiento.';
   const control = range
     ? '<input type="number" min="' + range[0] + '" max="' + range[1] + '" step="' +
-      (options.enteros.includes(field) ? "1" : "any") + '"' + attrs + ">"
-    : "<select" + attrs + "></select>";
-  return '<div><label for="' + field + '">' + safe(options.etiquetas[field]) + "</label>" + control +
+      (isInteger ? '1' : 'any') + '" inputmode="' + (isInteger ? 'numeric' : 'decimal') + '"' + attrs + '>'
+    : '<select' + attrs + '></select>';
+  return '<div><label for="' + field + '">' + safe(options.etiquetas[field]) + '</label>' + control +
+    '<span class="field-hint" id="hint-' + field + '">' + safe(hint) + '</span>' +
     '<span class="field-error" id="error-' + field + '"></span></div>';
 }
-byId("required-fields").innerHTML = formFields.filter(field => options.obligatorios.includes(field)).map(formField).join("");
-byId("optional-fields").innerHTML = formFields.filter(field => !options.obligatorios.includes(field)).map(formField).join("");
+byId('required-fields').innerHTML = formFields.filter(field => options.obligatorios.includes(field)).map(formField).join('');
+byId('optional-fields').innerHTML = formFields.filter(field => !options.obligatorios.includes(field)).map(formField).join('');
+byId('form-scope').textContent = 'Catálogo del entrenamiento: años ' + options.rangos.car_year.join('–') +
+  ', hasta ' + num(options.rangos.km[1]) + ' km. Son límites de entrada, no garantía de que cada combinación esté bien representada.';
 function setChoices(field, values, empty) {
-  selectOptions(byId(field), [["", empty], ...values.map(value => [value, value])]);
+  selectOptions(byId(field), [['', empty], ...values.map(value => [value, value])]);
 }
+let selectedBrand;
 function setModels() {
-  const brand = byId("brand").value;
-  setChoices("model", options.modelos[brand] ?? [], brand ? "Elegí el modelo" : "Elegí primero la marca");
-  byId("model").disabled = !brand;
+  const brand = byId('brand').value;
+  setChoices('model', options.modelos[brand] ?? [], brand ? 'Elegí el modelo' : 'Elegí primero la marca');
+  byId('model').disabled = !brand;
+  selectedBrand = brand;
 }
-setChoices("brand", Object.keys(options.modelos), "Elegí la marca");
+setChoices('brand', Object.keys(options.modelos), 'Elegí la marca');
 for (const [field, values] of Object.entries(options.categorias)) {
-  setChoices(field, values, options.obligatorios.includes(field) ? "Elegí una opción" : "Sin dato");
+  setChoices(field, values, options.obligatorios.includes(field) ? 'Elegí una opción' : 'Sin dato');
 }
-selectOptions(byId("example-choice"), [["", "Completar una ficha"], ...data.examples.map(({vehiculo}, i) =>
-  [i, vehicleName(vehiculo) + (i === 1 ? " · sin opcionales" : "")])]);
+selectOptions(byId('example-choice'), [['', 'Completar una ficha'], ...data.examples.map(({vehiculo}, i) =>
+  [i, vehicleName(vehiculo) + (formOptionalMissing(vehiculo).length ? ' · sin opcionales' : ' · completa')])]);
 setModels();
 
-function fieldError(field, message = "") {
-  byId("error-" + field).textContent = message;
-  if (message) byId(field).setAttribute("aria-invalid", "true");
-  else byId(field).removeAttribute("aria-invalid");
+function fieldError(field, message = '') {
+  byId('error-' + field).textContent = message;
+  if (message) byId(field).setAttribute('aria-invalid', 'true');
+  else byId(field).removeAttribute('aria-invalid');
 }
-function resetEstimate() {
-  byId("estimate").textContent = "USD ·";
-  byId("estimate-caption").textContent = "La estimación aparece al completar la ficha.";
-  byId("estimate-explanation").hidden = true;
+let hasEstimate = false;
+let estimateDirty = false;
+function resetEstimate(changed = false) {
+  byId('estimate').textContent = 'USD ·';
+  estimateDirty = changed && (hasEstimate || estimateDirty);
+  byId('estimate-caption').textContent = estimateDirty
+    ? 'La ficha cambió. Pulsá «Estimar precio» para actualizar.' : 'Completá la ficha y pulsá «Estimar precio».';
+  byId('estimate-explanation').hidden = true;
+  byId('estimate-explanation').open = false;
+  byId('explanation').replaceChildren();
+  hasEstimate = false;
 }
 function formValues() {
   return Object.fromEntries(formFields.map(field => [field, byId(field).value]));
@@ -310,72 +333,111 @@ function formValues() {
 function fieldErrors() {
   const result = validarVehiculo(formValues(), options);
   for (const field of formFields) {
-    if (byId(field).validity.badInput) result.errors[field] = options.etiquetas[field] + " debe ser un número.";
+    if (byId(field).validity.badInput) result.errors[field] = options.etiquetas[field] + ' debe ser un número.';
   }
   return result;
 }
 function clearFormStatus() {
-  byId("form-status").textContent = "";
+  byId('form-status').textContent = '';
   formFields.forEach(field => fieldError(field));
   resetEstimate();
 }
-byId("brand").addEventListener("change", () => { setModels(); fieldError("model"); });
-byId("vehicle-form").addEventListener("input", event => {
-  if (event.target.id === "example-choice") return;
-  byId("example-choice").value = "";
-  byId("form-status").textContent = "";
-  fieldError(event.target.id);
-  resetEstimate();
-});
-byId("vehicle-form").addEventListener("focusout", event => {
+function vehicleChanged(event) {
   const field = event.target.id;
-  if (formFields.includes(field) && (byId(field).value || byId(field).validity.badInput)) {
-    fieldError(field, fieldErrors().errors[field]);
+  if (!formFields.includes(field)) return;
+  if (field === 'brand' && byId('brand').value !== selectedBrand) {
+    setModels();
+    fieldError('model');
   }
-});
-byId("example-choice").addEventListener("change", event => {
+  byId('example-choice').value = '';
+  byId('form-status').textContent = '';
+  fieldError(field);
+  resetEstimate(true);
+}
+// Some controls/browsers emit only change; both paths must invalidate an old estimate.
+byId('vehicle-form').addEventListener('input', vehicleChanged);
+byId('vehicle-form').addEventListener('change', vehicleChanged);
+// Validate on submit so a blur error cannot move the control being clicked.
+byId('example-choice').addEventListener('change', event => {
   const value = event.target.value;
-  const sample = value === "" ? {} : data.examples[Number(value)].vehiculo;
-  byId("brand").value = sample.brand ?? "";
+  const sample = value === '' ? {} : data.examples[Number(value)].vehiculo;
+  byId('brand').value = sample.brand ?? '';
   setModels();
-  for (const field of formFields) byId(field).value = sample[field] ?? "";
+  for (const field of formFields) byId(field).value = sample[field] ?? '';
   clearFormStatus();
 });
-byId("vehicle-form").addEventListener("submit", event => {
+byId('vehicle-form').addEventListener('reset', event => {
+  event.preventDefault();
+  byId('example-choice').value = '';
+  formFields.forEach(field => { byId(field).value = ''; });
+  setModels();
+  clearFormStatus();
+  byId('optional-details').open = false;
+  byId('brand').focus();
+});
+byId('vehicle-form').addEventListener('submit', event => {
   event.preventDefault();
   const {vehicle, errors} = fieldErrors();
   formFields.forEach(field => fieldError(field, errors[field]));
   const first = formFields.find(field => errors[field]);
   if (first) {
     resetEstimate();
-    byId("form-status").textContent = "Revisá los campos marcados para estimar.";
-    if (!options.obligatorios.includes(first)) byId("optional-details").open = true;
+    byId('form-status').textContent = 'Revisá los campos marcados para estimar.';
+    if (!options.obligatorios.includes(first)) byId('optional-details').open = true;
     byId(first).focus();
     return;
   }
-  byId("form-status").textContent = "";
+  byId('form-status').textContent = '';
   const result = predecir(vehicle, data.model);
-  byId("estimate").textContent = preciseUSD(result.price);
-  const missing = formFields.filter(field => vehicle[field] === null);
-  byId("estimate-caption").textContent = vehicleName(vehicle) + " · " + num(vehicle.km) + " km. " +
-    (missing.length ? "Opcionales imputados: " + missing.map(field => options.etiquetas[field].split(" (")[0].toLowerCase()).join(", ") + "." :
-      "Ficha completa.");
-  byId("estimate-explanation").hidden = false;
+  byId('estimate').textContent = preciseUSD(result.price);
+  const missing = formOptionalMissing(vehicle);
+  byId('estimate-caption').textContent = vehicleName(vehicle) + ' · ' + num(vehicle.km) + ' km. ' +
+    (missing.length ? 'Opcionales imputados: ' + missing.map(field => options.etiquetas[field].split(' (')[0].toLowerCase()).join(', ') + '.' :
+      'Ficha completa.');
+  hasEstimate = true;
+  estimateDirty = false;
+  byId('estimate-explanation').hidden = false;
   if (result.neighbors) {
-    byId("explanation").innerHTML = table(neighborHeaders, result.neighbors.map(neighborValues)) +
+    byId('explanation').innerHTML = table(neighborHeaders, result.neighbors.map(neighborValues)) +
       '<p class="note">La estimación suma los aportes antes de redondear los valores de la tabla.</p>';
   } else if (result.contributions) {
     const labels = [...data.model.numeric.map(field => options.etiquetas[field]),
       ...data.model.categorical.flatMap((field, i) => data.model.categories[i].map(
-        value => options.etiquetas[field] + " · " + value))];
+        value => options.etiquetas[field] + ' · ' + value))];
     const rows = result.contributions.map((value, i) => [labels[i], value]).filter(([, value]) => value !== 0);
-    byId("explanation").innerHTML = table(["Término", "Aporte"], [
-      ["Intercepto", signed(data.model.intercept)], ...rows.map(([name, value]) => [name, signed(value)]),
+    byId('explanation').innerHTML = table(['Término', 'Aporte'], [
+      ['Intercepto', signed(data.model.intercept)], ...rows.map(([name, value]) => [name, signed(value)]),
     ]);
   } else {
-    byId("explanation").textContent = "La estimación usa la mediana de los precios de entrenamiento.";
+    byId('explanation').textContent = 'La estimación usa la mediana de los precios de entrenamiento.';
   }
 });
+
+const modelName = data.model.kind === 'knn'
+  ? 'k-NN con ' + num(data.model.k) + ' vecinos y peso ' + weightLabel(data.model.weights)
+  : chosen.modelo;
+byId('estimator-model').textContent = 'Usamos ' + modelName + '. Se eligió por el menor MAE medio en ' +
+  partition.folds.length + ' folds de entrenamiento (' + preciseUSD(chosen.MAE_CV) + '), antes de evaluar en prueba.';
+const preparation = '<strong>Preparamos y comparamos.</strong> Se escalan los números y se codifican las categorías. ';
+byId('estimator-process').innerHTML = preparation + (data.model.kind === 'knn'
+  ? 'Buscamos las ' + num(data.model.k) + ' fichas de entrenamiento de menor distancia euclídea. ' +
+    (data.model.weights === 'distance' ? 'Promediamos sus precios con pesos inversos a la distancia: cuanto más cerca, mayor peso. Si la distancia es cero, solo se promedian las coincidencias exactas entre los vecinos elegidos.' :
+      'Promediamos sus precios con el mismo peso para cada vecino.')
+  : data.model.kind === 'linear' ? 'La regresión lineal suma el intercepto y los aportes de las variables preparadas.' :
+    'La mediana devuelve el mismo precio de referencia de entrenamiento para todas las fichas.');
+byId('preprocessing-values').innerHTML = table(['Número', 'Mediana para faltantes', 'Media para escalar', 'Desviación para escalar'],
+  data.model.numeric.map((field, i) => [options.etiquetas[field], dec(data.model.median[i]), dec(data.model.mean[i]), dec(data.model.scale[i])])) +
+  '<p class="note">Valores mostrados con dos decimales; el cálculo conserva la precisión exportada.</p>' +
+  table(['Categoría', 'Moda para faltantes', 'Categorías codificadas'],
+    data.model.categorical.map((field, i) => [options.etiquetas[field], data.model.mode[i], data.model.categories[i].length]));
+byId('code-source').textContent = data.implementation.file + ' · ' + data.implementation.function + ' (fragmento real incorporado por el exportador).';
+byId('real-code').textContent = data.implementation.code;
+byId('estimator-ties').textContent = data.model.kind === 'knn'
+  ? 'Los pesos se normalizan para sumar 1. Si dos distancias empatan, se conserva el orden de entrenamiento. Marca o modelo iguales no son un filtro: son parte de la distancia; pueden aparecer vecinos de otra marca o modelo.'
+  : 'El navegador aplica los mismos parámetros de imputación, escalado y categorías que el Pipeline ajustado.';
+for (const [key, src] of Object.entries(data.edaImages)) byId('eda-' + key).src = src;
+byId('brand-summary').innerHTML = table(['Marca', 'Avisos', 'Mediana publicada (USD)'],
+  data.brandSummary.map(row => [row.brand, num(row.n), num(row.mediana)]));
 
 const reduction = 1 - chosen.MAE_test / baseline.MAE_test;
 byId("conclusion").textContent = chosen.modelo + " obtuvo un MAE de " + preciseUSD(chosen.MAE_test) +
@@ -397,3 +459,44 @@ const observer = new ResizeObserver(entries => entries.forEach(({target}) => {
   if (target.clientWidth) charts[target.id]();
 }));
 Object.keys(charts).forEach(id => observer.observe(byId(id)));
+
+// Local anchors stay in this document and move keyboard focus with the visible section.
+const sections = [...document.querySelectorAll('main > section')];
+const route = byId('route-menu');
+const sectionTitle = section => section.querySelector('h1, h2').textContent;
+byId('route-links').innerHTML = sections.map(section => '<li><a href="#' + section.id + '">' +
+  safe(sectionTitle(section)) + '</a></li>').join('');
+sections.forEach((section, index) => {
+  const heading = section.querySelector('h1, h2');
+  heading.tabIndex = -1;
+  const label = document.createElement('p');
+  label.className = 'section-number';
+  label.textContent = String(index + 1).padStart(2, '0') + ' / ' + sections.length;
+  heading.before(label);
+  const pager = document.createElement('nav');
+  pager.className = 'section-pager';
+  pager.setAttribute('aria-label', 'Navegar desde ' + sectionTitle(section));
+  pager.innerHTML = (index ? '<a href="#' + sections[index - 1].id + '">← Anterior</a>' : '<a href="#problema">Comenzar →</a>') +
+    (index && index < sections.length - 1 ? '<a href="#' + sections[index + 1].id + '">Siguiente →</a>' :
+      index ? '<a href="#portada">Volver al inicio ↑</a>' : '');
+  section.querySelector('.wrap').append(pager);
+});
+document.addEventListener('click', event => {
+  const link = event.target.closest('a[href^="#"]');
+  if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button) return;
+  const target = document.querySelector(link.getAttribute('href'));
+  if (!target) return;
+  event.preventDefault();
+  route.open = false;
+  const heading = target.matches('section') ? target.querySelector('h1, h2') : target;
+  heading.focus({preventScroll: true});
+  target.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+  history.replaceState(null, '', link.getAttribute('href'));
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && route.open) {
+    route.open = false;
+    route.querySelector('summary').focus();
+  }
+});
+document.addEventListener('click', event => { if (route.open && !route.contains(event.target)) route.open = false; });

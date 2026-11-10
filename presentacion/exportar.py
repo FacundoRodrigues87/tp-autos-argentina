@@ -1,13 +1,17 @@
 """Armá el HTML autónomo con los resultados del notebook."""
 
+import argparse
+import base64
+import inspect
 import json
+import textwrap
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
 
-from src.autos import CAT, META, NUM, RESULTS, ROOT, VecinosRegresor, cargar, limpiar
+from src.autos import CAT, FEATURES, META, NUM, REQUIRED, RESULTS, ROOT, VecinosRegresor, cargar, limpiar, preprocesador
 
 HERE = Path(__file__).resolve().parent
 
@@ -39,10 +43,20 @@ def export_model(pipeline):
     return {**state, "kind": "median", "value": float(model.constant_.item())}
 
 
-def payload():
+def demo_examples(train):
+    """Fichas originales por ID: no varían por empates al ordenar kilometrajes."""
+    ids = ["MLA1402454175", "MLA1546276856", "MLA1640255410"]
+    rows = train.set_index("id")
+    if not set(ids).issubset(rows.index):
+        raise ValueError("Una ficha de demostración ya no está en entrenamiento. Revisá los IDs en demo_examples.")
+    return [{"id": identifier, "vehiculo": rows.loc[identifier, FEATURES if i != 1 else REQUIRED].to_dict()}
+            for i, identifier in enumerate(ids)]
+
+
+def payload(model_path=None):
     raw = cargar()
     data, _ = limpiar(raw)
-    saved = joblib.load(RESULTS / "modelo.joblib")
+    saved = joblib.load(model_path or RESULTS / "modelo.joblib")
     cases = pd.read_csv(RESULTS / "catalogo_evaluacion.csv")
     typical = (cases["error_abs"] - cases["error_abs"].median()).abs().idxmin()
     highlighted = pd.concat([cases.loc[[typical]], cases.nlargest(2, "error_abs")])
@@ -60,7 +74,15 @@ def payload():
         ["MLA1404982421", "MLA1639157994", "MLA1403304889"], ["title", "model", "car_year", "doors", "price"]
     ]
     winner = export_model(saved["modelo"])
+    implementation = VecinosRegresor.predict if winner["kind"] == "knn" else preprocesador
+    eda = {key: "data:image/png;base64," + base64.b64encode((RESULTS / filename).read_bytes()).decode("ascii")
+           for key, filename in {"univariate": "01_univariado.png", "correlation": "03_correlacion.png",
+                                 "brands": "04_marcas.png"}.items()}
+    brands = data.groupby("brand").agg(n=("price", "size"), mediana=("price", "median"))
     return {
+        "implementation": {"file": "src/autos.py", "function": implementation.__qualname__,
+                           "code": textwrap.dedent(inspect.getsource(implementation)).strip()},
+        "edaImages": eda, "brandSummary": records(brands.sort_values("mediana").reset_index()),
         "source": json.loads(META.read_text(encoding="utf-8")),
         "raw": {"rows": len(raw), "cols": len(raw.columns)},
         "selected": int(audit.loc[audit.accion.eq("selección"), "cantidad"].iloc[0]),
@@ -75,14 +97,17 @@ def payload():
         "errors": records(pd.read_csv(RESULTS / "errores_segmentos.csv")),
         "cases": records(highlighted[["id", "brand", "model", "car_year", "price", "precio_estimado", "error"]]),
         "testPoints": cases[["price", "precio_estimado"]].to_numpy().tolist(),
-        "options": saved["opciones"], "examples": saved["ejemplos"],
+        "options": saved["opciones"], "examples": demo_examples(saved["train"]),
         "model": winner, "knn": None if winner["kind"] == "knn" else export_model(saved["comparacion_knn"]),
         "neighbors": records(saved["train"][["brand", "model", "car_year", "km"]]),
     }
 
 
 def main():
-    data = json.dumps(payload(), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--modelo", type=Path, help="Modelo joblib local; por defecto resultados/modelo.joblib")
+    args = parser.parse_args()
+    data = json.dumps(payload(args.modelo), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     template = (HERE / "layout.html.in").read_text(encoding="utf-8")
     for token, content in {
         "/* ESTILOS */": (HERE / "estilos.css").read_text(encoding="utf-8"),

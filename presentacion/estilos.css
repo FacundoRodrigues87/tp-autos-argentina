@@ -145,3 +145,75 @@ output { display: block; color: var(--accent-dark); font-weight: 760; font-size:
   .top, .controls, .skip { display: none; }
   section, .cover { min-height: 0; padding-block: 24px; }
 }
+
+/* Recorrido, evidencia y explicación del estimador. Sin recursos externos. */
+.top { position: sticky; top: 0; z-index: 10; }
+.top nav { position: relative; }
+section { scroll-margin-top: 88px; }
+.skip { position: fixed; z-index: 20; }
+.route-menu { margin: 0 0 0 auto; border: 0; }
+.route-menu > summary { padding: 8px; }
+.route-menu[open] > summary { margin: 0; }
+.route-menu ol { position: absolute; top: 60px; right: 0; width: min(680px, 100%); max-height: calc(100svh - 100px); overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; margin: 0; padding: 16px 20px 16px 42px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 12px 30px #172a2820; }
+.route-menu a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px; line-height: 1.35; }
+.section-number { color: var(--accent); font: 650 .85rem/1.4 Consolas, monospace; letter-spacing: .05em; margin-bottom: 12px; }
+.section-pager { display: flex; justify-content: space-between; gap: 20px; margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line); }
+.section-pager a { display: inline-flex; align-items: center; min-height: 44px; }
+.notebook-figures { margin-top: 24px; }
+.notebook-figures img { display: block; width: 100%; height: auto; border: 1px solid var(--line); background: white; }
+.notebook-figures .evidence { gap: 24px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#brand-summary { margin-top: 20px; }
+.table-wrap:focus-visible { outline-offset: -3px; }
+.table-wrap th { min-width: 6ch; }
+.tick, .axis-title { font-size: 13px; }
+.field-group-label { margin-bottom: 10px; font-weight: 700; font-size: 1rem; }
+.field-hint { display: block; color: var(--muted); font-size: .8rem; line-height: 1.45; margin-top: 4px; }
+.field-hint:empty { display: none; }
+form .controls { margin-bottom: 0; }
+form .controls button { margin-top: 0; }
+.estimator-guide { scroll-margin-top: 88px; margin-top: 28px; padding: 24px 0 0; border-top: 2px solid var(--accent); }
+.estimator-guide > p { max-width: 90ch; }
+.estimation-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 34px; padding-inline-start: 22px; margin: 20px 0; }
+.estimation-steps li { padding-inline-start: 4px; }
+.estimation-steps li::marker { color: var(--accent-dark); font-weight: 700; }
+.estimation-steps strong { display: block; margin-bottom: 5px; }
+pre { max-width: 100%; overflow-x: auto; padding: 16px; background: var(--wash); border-radius: var(--radius); font-size: .85rem; line-height: 1.6; tab-size: 4; }
+code { font-family: Consolas, ui-monospace, monospace; }
+@media (max-width: 767px) {
+  .top nav { gap: 8px; min-height: 64px; }
+  .wordmark { font-size: .94rem; }
+  .jump { font-size: .9rem; gap: 4px; }
+  .route-menu summary { font-size: .9rem; padding-inline: 4px; }
+  .route-menu ol { grid-template-columns: minmax(0, 1fr); }
+  .estimation-steps, .notebook-figures .evidence { grid-template-columns: minmax(0, 1fr); }
+  .estimator-guide { scroll-margin-top: 88px; margin-top: 24px; }
+  .tick, .axis-title { font-size: 12px; }
+  .bar-label { flex-wrap: wrap; gap: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+@media print {
+  .section-pager { display: none; }
+  .wrap { width: 100%; }
+  .estimation-steps { grid-template-columns: minmax(0, 1fr); }
+  .table-wrap { overflow: visible; }
+  .chart, figure, .bar-row { break-inside: avoid; }
+}
+.section-pager { grid-column: 1 / -1; width: 100%; }
+
+.jump-short { display: none; }
+@media (max-width: 600px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 400px) {
+  .jump-full, .jump-arrow { display: none; }
+  .jump-short { display: inline; }
+}
+
+.figure-scroll { max-width: 100%; overflow-x: auto; }
+.figure-scroll:focus-visible { outline-offset: -3px; }
+@media (max-width: 767px) {
+  .figure-scroll img { min-width: 680px; }
+}
+@media print { .figure-scroll img { min-width: 0; } }

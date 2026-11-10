@@ -12,7 +12,11 @@
   <header class="top">
     <nav class="wrap" aria-label="Navegación principal">
       <a href="#portada" class="wordmark">Autos usados <span>Argentina</span></a>
-      <a href="#estimador" class="jump">Ir al estimador <span aria-hidden="true">↘</span></a>
+      <details id="route-menu" class="route-menu">
+        <summary>Recorrido</summary>
+        <ol id="route-links" aria-label="Las trece secciones"></ol>
+      </details>
+      <a href="#estimador" class="jump"><span class="jump-full">Ir al estimador</span><span class="jump-short">Estimador</span><span class="jump-arrow" aria-hidden="true">↘</span></a>
     </nav>
   </header>
   <main>
@@ -20,7 +24,8 @@
       <div class="wrap">
         <p class="eyebrow">UADE / Python para Ciencia de Datos</p>
         <h1 id="titulo">¿Qué precio le pongo a mi auto usado?</h1>
-        <p>Estimamos en dólares el precio de publicación de un usado a partir de sus características y de avisos de Mercado Libre Argentina.</p>
+        <p>Estimamos en dólares el precio de publicación de un usado a partir de sus características y de avisos históricos de Mercado Libre Argentina.</p>
+        <p class="note">Datos con actualización de febrero de 2024 · Precios pedidos, en USD</p>
       </div>
     </section>
     <section id="problema" aria-labelledby="h-problema">
@@ -72,7 +77,8 @@
       </div>
     </section>
     <section id="distribucion" aria-labelledby="h-distribucion">
-      <div class="wrap split chart-split">
+      <div class="wrap">
+        <div class="split chart-split">
         <div>
           <h2 id="h-distribucion">Cómo se distribuyen los precios</h2>
           <p id="price-copy"></p>
@@ -82,10 +88,17 @@
           <div class="chart" id="histogram"></div>
           <figcaption>Todos los avisos limpios. Cada barra agrupa USD 5.000.</figcaption>
         </figure>
+        </div>
+        <details class="notebook-figures">
+          <summary>Ver histogramas y boxplots del notebook</summary>
+          <p class="note">En pantallas pequeñas, desplazá el gráfico horizontalmente para leer sus etiquetas.</p>
+          <figure><div class="figure-scroll" tabindex="0" role="region" aria-label="Histogramas y boxplots. Gráfico con desplazamiento horizontal en pantallas pequeñas."><img id="eda-univariate" alt="Histogramas y boxplots de precio y kilometraje de la muestra limpia" loading="lazy"></div><figcaption>resultados/01_univariado.png · Los puntos del boxplot muestran valores alejados de los cuartiles; no se excluyen solo por ser extremos.</figcaption></figure>
+        </details>
       </div>
     </section>
     <section id="relaciones" aria-labelledby="h-relaciones">
-      <div class="wrap split chart-split">
+      <div class="wrap">
+        <div class="split chart-split">
         <div>
           <h2 id="h-relaciones">Qué se relaciona con el precio</h2>
           <label for="relation-choice">Comparar el precio con</label>
@@ -97,7 +110,17 @@
           <p id="relation-copy" aria-live="polite"></p>
           <p class="note">Cada punto representa un aviso con ambas variables disponibles. Los patrones muestran asociación.</p>
         </div>
-        <figure><div id="relation-chart" class="chart"></div></figure>
+        <figure><div id="relation-chart" class="chart"></div><figcaption>La dispersión impide deducir un precio exacto a partir de una sola característica.</figcaption></figure>
+        </div>
+        <details class="notebook-figures">
+          <summary>Ver correlaciones y agrupación por marca</summary>
+          <p class="note">En pantallas pequeñas, desplazá los gráficos horizontalmente para leer sus etiquetas.</p>
+          <div class="split evidence">
+            <figure><div class="figure-scroll" tabindex="0" role="region" aria-label="Correlaciones. Gráfico con desplazamiento horizontal en pantallas pequeñas."><img id="eda-correlation" alt="Mapa de correlaciones de Pearson entre precio y variables numéricas" loading="lazy"></div><figcaption>resultados/03_correlacion.png · Asociación lineal entre pares disponibles.</figcaption></figure>
+            <figure><div class="figure-scroll" tabindex="0" role="region" aria-label="Medianas por marca. Gráfico con desplazamiento horizontal en pantallas pequeñas."><img id="eda-brands" alt="Mediana del precio publicado por marca" loading="lazy"></div><figcaption>resultados/04_marcas.png · Medianas calculadas con groupby y agg en el notebook. Cada marca mezcla modelos, años y kilómetros distintos.</figcaption></figure>
+          </div>
+          <div id="brand-summary"></div>
+        </details>
       </div>
     </section>
     <section id="algoritmos" aria-labelledby="h-algoritmos">
@@ -109,14 +132,15 @@
           <div><dt>k-NN</dt><dd>Calcula la distancia entre fichas y promedia los precios de las más cercanas.</dd></div>
         </dl>
         <p id="selection-copy" class="standout"></p>
-        <details><summary>Ver las ocho configuraciones evaluadas</summary><div id="cv-table"></div></details>
+        <details><summary>Ver las ocho configuraciones evaluadas</summary><div id="cv-table"></div><p class="note">La tabla conserva los resultados guardados del notebook. La reproducción local mantuvo el ganador y las métricas de prueba, pero cambió los MAE de validación. Falta conciliar esa diferencia antes de cerrar la entrega; está documentada en el handoff de la presentación.</p></details>
       </div>
     </section>
     <section id="particiones" aria-labelledby="h-particiones">
       <div class="wrap split">
         <div>
           <h2 id="h-particiones">Entrenar, validar y probar</h2>
-          <p>Marca, modelo, versión y año definen los grupos. Una vez separados, los grupos de prueba quedan reservados para la evaluación final.</p>
+          <p>Primero reservamos la prueba. Dentro del entrenamiento comparamos las configuraciones en cinco folds y elegimos por su MAE medio. Después evaluamos en prueba.</p>
+          <p class="note">Marca, modelo, versión y año definen los grupos que se mantienen juntos. La separación es aleatoria por grupos, no por fecha.</p>
           <p class="note" id="partition-copy"></p>
         </div>
         <div class="panel">
@@ -189,28 +213,49 @@
     <section id="estimador" aria-labelledby="h-estimador">
       <div class="wrap">
         <h2 id="h-estimador">Estimá el precio de un vehículo</h2>
-        <p>Elegí una ficha de ejemplo o completá las características. Podés dejar en blanco las especificaciones que no conozcas.</p>
+        <p>Elegí una ficha de ejemplo o completá los seis campos obligatorios. Podés dejar en blanco los cinco opcionales. Los importes se expresan en USD.</p>
+        <p class="note" id="form-scope"></p>
         <div class="estimator">
           <form id="vehicle-form" novalidate>
             <div class="example-control">
               <label for="example-choice">Fichas de entrenamiento</label>
               <select id="example-choice"></select>
             </div>
+            <p class="field-group-label">Datos obligatorios</p>
             <div id="required-fields" class="fields"></div>
             <details id="optional-details">
               <summary>Especificaciones opcionales</summary>
               <div id="optional-fields" class="fields"></div>
             </details>
-            <button type="submit">Estimar precio</button>
+            <div class="controls"><button type="submit">Estimar precio</button><button type="reset" class="secondary">Limpiar ficha</button></div>
             <p id="form-status" class="form-status" role="status"></p>
           </form>
           <div class="estimate-panel">
             <p class="note">Precio de publicación estimado</p>
-            <output id="estimate" for="brand model car_year km fuel_type transmission" aria-live="polite">USD ·</output>
-            <p id="estimate-caption">La estimación aparece al completar la ficha.</p>
+            <output id="estimate" for="brand model car_year km fuel_type transmission engine_l power_hp doors passenger_capacity traction_control" aria-live="polite" aria-describedby="estimate-caption">USD ·</output>
+            <p id="estimate-caption">Completá la ficha y pulsá «Estimar precio».</p>
             <p class="note">Referencia basada en avisos históricos.</p>
           </div>
         </div>
+        <aside class="estimator-guide" aria-labelledby="h-estimator-guide">
+          <h3 id="h-estimator-guide">Cómo funciona esta estimación</h3>
+          <p id="estimator-model"></p>
+          <ol class="estimation-steps">
+            <li><strong>Ingresás una ficha.</strong> Marca, modelo, año, kilómetros, combustible y transmisión. Los números opcionales vacíos se completan con la mediana de entrenamiento; la tracción, con la categoría más frecuente.</li>
+            <li id="estimator-process"></li>
+            <li><strong>Obtenés un precio pedido en USD.</strong> Es una referencia histórica: no contempla estado, mantenimiento ni negociación. El MAE resume errores del test; no es un margen garantizado para tu auto.</li>
+          </ol>
+          <p class="note">Python limpia, entrena y evalúa. El exportador incorpora el modelo ajustado y los resultados al HTML. JavaScript aplica esos parámetros y calcula en tu navegador, sin conexión ni envío de la ficha.</p>
+          <details>
+            <summary>Ver transformaciones y código real</summary>
+            <p>Primero se completan los faltantes. Después cada número se transforma como (valor − media) ÷ desviación de entrenamiento. Cada categoría se convierte en indicadores 0/1 (one-hot). Así los kilómetros no dominan por su unidad.</p>
+            <p class="note">El formulario acepta las opciones de entrenamiento. El codificador de Python ignora categorías desconocidas, pero el formulario las rechaza para limitar el uso al catálogo disponible.</p>
+            <div id="preprocessing-values"></div>
+            <p class="note" id="code-source"></p>
+            <pre><code id="real-code"></code></pre>
+            <p class="note" id="estimator-ties"></p>
+          </details>
+        </aside>
         <details id="estimate-explanation" hidden>
           <summary>Ver cómo se calculó la estimación</summary>
           <div id="explanation"></div>
@@ -221,7 +266,8 @@
       <div class="wrap">
         <h2 id="h-conclusiones">Qué aprendimos</h2>
         <p id="conclusion" class="standout"></p>
-        <p>El error crece en algunos segmentos. El recorte cubre avisos de usados ofrecidos en USD y sus características declaradas. Los importes describen un mercado histórico y pueden diferir del precio de una operación.</p>
+        <p>El error crece en el tramo de precio alto y en los autos más recientes del test. El recorte cubre avisos de usados ofrecidos en USD y sus características declaradas. Los importes describen un mercado histórico y pueden diferir del precio de una operación.</p>
+        <p>Para mejorar, incorporaríamos estado e historial del vehículo, revisaríamos avisos contradictorios y evaluaríamos con datos más recientes. Esas mejoras quedan propuestas; no están medidas en esta versión.</p>
         <aside class="method" aria-labelledby="h-method">
           <h3 id="h-method">Fuente, alcance y método</h3>
           <div id="provenance"></div>
