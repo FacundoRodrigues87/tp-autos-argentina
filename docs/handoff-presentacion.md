@@ -3,7 +3,7 @@
 Rama de trabajo: `codex/presentacion-defensa`. No se integró ni modificó `main` ni `codex/autos-meli-arg`. Se trabajó desde una copia separada; no se usaron cambios de la otra sesión.
 
 - **SHA base exacto:** `1b05003f3ece1fde18c8bd218a4cc78cb212278c`.
-- **SHA final de implementación y pruebas:** se registra en el commit de cierre documental.
+- **SHA final de implementación y pruebas:** `77801cf94c484ac1bd49e5bdf5a0fcd9029d58d8`. El commit posterior de cierre modifica únicamente este handoff para registrar el SHA ya verificado; el código y el HTML son los de esta referencia.
 - **Checkout local permanente:** `/Users/facu.rodrii/Documents/03 Notas/01 Facultad/Python para Ciencia de Datos/TP/presentacion-defensa`. Se creó primero en `/private/tmp/` y se trasladó con `git worktree move` después de verificarlo.
 - La herramienta `create_worktree` se intentó dos veces y no devolvió resultado. Se comprobó que no había creado un checkout y se usó `git worktree add -b codex/presentacion-defensa` desde el SHA base. El checkout original estaba limpio al comenzar y se preservó. No se cambiaron configuraciones de seguridad.
 
@@ -96,5 +96,7 @@ PLAYWRIGHT_MODULE=/ruta/node_modules/playwright CHROMIUM_EXECUTABLE=/ruta/chromi
 ```
 
 El primer comando guarda el informe `modelo.validacion.json` junto al modelo temporal. Las dependencias Node del verificador se usan desde un entorno separado: el HTML no necesita instalarlas. En Windows, adaptar las rutas temporales y las variables de entorno.
+
+El HTML final tiene SHA-256 `f3dd3e35d255b2c80ea0900fd8838fe65230fea2ff46916841d0a8459982dbdf`; una regeneración independiente produjo los mismos bytes. Tras trasladar el worktree se volvió a abrir por `file://` desde la ruta permanente con espacios: demo Up! y navegación con foco correctas, sin errores.
 
 En esta sesión se usaron `/private/tmp/tp-autos-presentacion-env/bin/python`, `/private/tmp/tp-autos-presentacion-pruebas/` y el Chromium disponible en la caché local. Esos archivos temporales y el modelo no se incluyeron en Git. Para abrir ahora, usar el archivo de este checkout `presentacion/presentacion.html`; también se puede descargar el HTML de la rama y abrirlo localmente.
