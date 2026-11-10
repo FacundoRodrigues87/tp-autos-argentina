@@ -11,7 +11,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.autos import CAT, FEATURES, META, NUM, REQUIRED, RESULTS, ROOT, VecinosRegresor, cargar, limpiar, preprocesador
+from src.autos import CAT, FEATURES, META, NUM, REQUIRED, RESULTS, ROOT, VecinosRegresor, cargar, limpiar, preprocesador, ejemplos
 
 HERE = Path(__file__).resolve().parent
 
@@ -45,12 +45,7 @@ def export_model(pipeline):
 
 def demo_examples(train):
     """Fichas originales por ID: no varían por empates al ordenar kilometrajes."""
-    ids = ["MLA1402454175", "MLA1546276856", "MLA1640255410"]
-    rows = train.set_index("id")
-    if not set(ids).issubset(rows.index):
-        raise ValueError("Una ficha de demostración ya no está en entrenamiento. Revisá los IDs en demo_examples.")
-    return [{"id": identifier, "vehiculo": rows.loc[identifier, FEATURES if i != 1 else REQUIRED].to_dict()}
-            for i, identifier in enumerate(ids)]
+    return ejemplos(train)
 
 
 def payload(model_path=None):
@@ -103,10 +98,10 @@ def payload(model_path=None):
     }
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--modelo", type=Path, help="Modelo joblib local; por defecto resultados/modelo.joblib")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     data = json.dumps(payload(args.modelo), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     template = (HERE / "layout.html.in").read_text(encoding="utf-8")
     for token, content in {

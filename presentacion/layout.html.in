@@ -132,7 +132,7 @@
           <div><dt>k-NN</dt><dd>Calcula la distancia entre fichas y promedia los precios de las más cercanas.</dd></div>
         </dl>
         <p id="selection-copy" class="standout"></p>
-        <details><summary>Ver las ocho configuraciones evaluadas</summary><div id="cv-table"></div><p class="note">La tabla conserva los resultados guardados del notebook. La reproducción local mantuvo el ganador y las métricas de prueba, pero cambió los MAE de validación. Falta conciliar esa diferencia antes de cerrar la entrega; está documentada en el handoff de la presentación.</p></details>
+        <details><summary>Ver las ocho configuraciones evaluadas</summary><div id="cv-table"></div><p class="note">Los cinco folds mezclan grupos con semilla 42 y se guardan sus IDs para repetir la validación. Cada grupo queda completo en un fold. Las métricas de esta tabla corresponden a la ejecución integrada del notebook.</p></details>
       </div>
     </section>
     <section id="particiones" aria-labelledby="h-particiones">
@@ -268,6 +268,7 @@
         <p id="conclusion" class="standout"></p>
         <p>El error crece en el tramo de precio alto y en los autos más recientes del test. El recorte cubre avisos de usados ofrecidos en USD y sus características declaradas. Los importes describen un mercado histórico y pueden diferir del precio de una operación.</p>
         <p>Para mejorar, incorporaríamos estado e historial del vehículo, revisaríamos avisos contradictorios y evaluaríamos con datos más recientes. Esas mejoras quedan propuestas; no están medidas en esta versión.</p>
+        <p class="note">La separación por marca, modelo, versión y año no identifica vehículos físicos: distintas publicaciones o versiones pueden compartir todas las características que usa el modelo. Esa cobertura limita la interpretación de las métricas.</p>
         <aside class="method" aria-labelledby="h-method">
           <h3 id="h-method">Fuente, alcance y método</h3>
           <div id="provenance"></div>

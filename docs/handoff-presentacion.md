@@ -1,5 +1,7 @@
 # Handoff de la presentación para la defensa
 
+> Registro histórico de esa rama. El estado actual, los cambios de validación cruzada y las pruebas conjuntas están en [integración de la defensa](integracion-defensa.md).
+
 Rama de trabajo: `codex/presentacion-defensa`. No se integró ni modificó `main` ni `codex/autos-meli-arg`. Se trabajó desde una copia separada; no se usaron cambios de la otra sesión.
 
 - **SHA base exacto:** `1b05003f3ece1fde18c8bd218a4cc78cb212278c`.

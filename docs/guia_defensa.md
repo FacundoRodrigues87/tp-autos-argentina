@@ -12,3 +12,13 @@
 - **¿Qué fecha representa 2024?** Es el año del corte del dataset. El año de cada fila corresponde al vehículo.
 
 El [guion de la presentación](../presentacion/guion.md) incluye el reparto y los casos para mostrar.
+
+## Puntos para explicar con ejemplos
+
+- **One-hot:** dos categorías distintas se representan como columnas indicadoras 0/1; no se impone que una marca valga el doble que otra. Las categorías se aprenden solo en el ajuste de cada fold.
+- **Empate en vecinos:** si el quinto y el sexto están a igual distancia, se elige según el orden de entrenamiento, compartido por Python y JavaScript. Con coincidencias exactas, solo ellas reciben peso. Esta convención justifica conservar VecinosRegresor.
+- **Baseline y referencia de R²:** el baseline del proyecto es la mediana de train. R² usa como comparación matemática la media del conjunto evaluado. No son la misma referencia.
+- **Reparto de validación:** GroupKFold con shuffle=True, semilla 42 e IDs guardados; no se mueve el test para elegir el modelo. El MAE de CV actual es USD 1.536,72, distinto del histórico por un reparto interno diferente.
+- **Cobertura de grupos:** no compartir la clave marca/modelo/versión/año no garantiza que los 11 predictores sean todos diferentes. Hay 14 fichas del test que coinciden con alguna de train; no se puede identificar vehículos físicos con certeza.
+
+El guion de seis integrantes corresponde a la excepción prevista en la consigna; el grupo debe confirmar con el instructor que esa modalidad aplica.

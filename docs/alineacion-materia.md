@@ -66,3 +66,7 @@
 | Distribución | Plantilla HTML, CSS, JavaScript y datos embebidos | El navegador ejecuta el estimador autónomo. Node.js solo se usa para la prueba de equivalencia en esta revisión. Seaborn y los perfiles automáticos de U3 son recursos de clase prescindibles para la entrega del TP. |
 
 El grupo tiene evidencia de clase para defender la limpieza, el EDA, las agregaciones, la formulación de la regresión, el baseline, el escalado, k-NN, `GridSearchCV` y las métricas. Para defender las decisiones propias del TP, practiquen con ejemplos breves cómo se forma la clave, cómo se transforma una categoría en indicadores y qué hace k-NN cuando hay distancias iguales. El detalle de `cdist`, las clases de integración y la exportación explica cómo se comparte el modelo entre notebook, consola y navegador.
+
+## Nota de integración
+
+El núcleo académico de esta revisión se conserva. La rama integrada usa GroupKFold con shuffle=True y semilla 42 y registra IDs por fold para hacer auditable el reparto interno. Es una extensión de control de reproducibilidad, no un contenido atribuido a la cursada. Se conservan baseline, modelos, grilla, escalado y selección por MAE sin consultar test. Las fichas de demostración se comparten por ID entre Python y HTML. Ver [integración](integracion-defensa.md).

@@ -17,7 +17,7 @@ from sklearn.compose import ColumnTransformer
 from presentacion import exportar
 from src.autos import (
     CAT, FEATURES, GROUP, NUM, RESULTS, YEAR,
-    VecinosRegresor, cargar, estimar, ficha, limpiar, seleccionar, separar,
+    VecinosRegresor, cargar, estimar, ejemplos, ficha, limpiar, seleccionar, separar,
 )
 
 
@@ -92,6 +92,22 @@ class RevisionProgramaTests(unittest.TestCase):
         expected_fits[tuple(train_only.train.index)] = len(searches)
         self.assertEqual(fit_rows, expected_fits)
 
+    def test_ids_de_particiones_coinciden_con_la_corrida_guardada(self):
+        recorded = json.loads((RESULTS / "particiones.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.parts.train.id.tolist(), recorded["ids_train"])
+        self.assertEqual(self.parts.test.id.tolist(), recorded["ids_test"])
+        for (fit, val), saved in zip(self.parts.folds, recorded["folds"], strict=True):
+            self.assertEqual(self.parts.train.iloc[fit].id.tolist(), saved["ids_ajuste"])
+            self.assertEqual(self.parts.train.iloc[val].id.tolist(), saved["ids_validacion"])
+
+    def test_demo_comparte_ids_y_no_depende_del_orden_de_filas(self):
+        original = ejemplos(self.parts.train)
+        shuffled = ejemplos(self.parts.train.sample(frac=1, random_state=7))
+        self.assertEqual([x["id"] for x in original], [x["id"] for x in shuffled])
+        for first, second in zip(original, shuffled, strict=True):
+            pd.testing.assert_series_equal(pd.Series(first["vehiculo"]), pd.Series(second["vehiculo"]))
+        self.assertEqual(exportar.demo_examples(self.parts.train), original)
+
     def test_vecinos_respetan_empates_y_coincidencias_exactas(self):
         tied = VecinosRegresor(2).fit([[1.0], [-1.0], [1.0]], [100, 200, 400])
         indices, distances, weights = tied.neighbors([[0.0]])
@@ -118,7 +134,7 @@ class PresentacionTests(unittest.TestCase):
             root = Path(directory)
             (root / "presentacion").mkdir()
             with patch.object(exportar, "ROOT", root):
-                exportar.main()
+                exportar.main([])
             html = (root / "presentacion/presentacion.html").read_text(encoding="utf-8")
 
         self.assertIn(script, html)

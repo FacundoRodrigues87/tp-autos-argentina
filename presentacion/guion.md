@@ -4,7 +4,7 @@ El proyecto estima **precios de publicación de usados en USD**. La presentació
 
 Conservamos seis integrantes, sin asignar nombres. Los bloques suman **19 minutos**; reservar 3–5 minutos para preguntas da 22–24 minutos. Ensayar el recorrido y ajustar el ritmo, sin convertir los tiempos sugeridos en criterios de evaluación.
 
-**Control pendiente antes de entregar:** los CSV guardados y el HTML coinciden. La reproducción local confirmó ganador, las 831 predicciones y métricas de prueba, pero dio otros MAE de validación cruzada. Las cifras de CV de abajo son las **guardadas**, no una reproducción exacta. Consultar [el handoff](../docs/handoff-presentacion.md); al integrar la revisión de Python se debe conciliar esta diferencia y regenerar el HTML. Si preguntan por ella, explicarla sin afirmar que ya está resuelta.
+**Control de integración:** el notebook y los CSV se regeneraron con cinco folds por grupos mezclados con semilla 42. Se guardan los IDs de cada fold. El MAE de CV de k-NN es USD 1.536,72; reemplaza el valor de la versión anterior porque cambió el reparto interno de validación. El test y sus predicciones se conservan. Ver [integración y pruebas](../docs/integracion-defensa.md).
 
 ## Integrante 1 · Secciones 1 a 3 · 3 min
 
@@ -24,7 +24,7 @@ Conservamos seis integrantes, sin asignar nombres. Los bloques suman **19 minuto
 
 ## Integrante 3 · Secciones 7 y 8 · 3 min
 
-7. **Algoritmos.** El baseline predice siempre la mediana **del entrenamiento**, USD 8.500; no es la mediana de USD 8.700 de la muestra completa. La regresión lineal suma un intercepto y contribuciones aprendidas. k-NN busca fichas próximas y promedia sus precios. Se evaluaron ocho configuraciones: baseline, lineal y seis k-NN (5, 15 y 35 vecinos, con pesos uniformes o por distancia). En los resultados guardados ganó k-NN con 5 y distancia, MAE de CV USD 1.504,65. Explicar el control de reproducción pendiente si se abre esa tabla.
+7. **Algoritmos.** El baseline predice siempre la mediana **del entrenamiento**, USD 8.500; no es la mediana de USD 8.700 de la muestra completa. La regresión lineal suma un intercepto y contribuciones aprendidas. k-NN busca fichas próximas y promedia sus precios. Se evaluaron ocho configuraciones: baseline, lineal y seis k-NN (5, 15 y 35 vecinos, con pesos uniformes o por distancia). En la ejecución integrada ganó k-NN con 5 y distancia, MAE de CV USD 1.536,72. Los cinco folds mezclan grupos con semilla 42; sus IDs están registrados para repetir el reparto.
 8. **Separación.** Primero se reservan 831 avisos para prueba y quedan 3.213 para entrenamiento: 20,55 % y 79,45 %. Marca, modelo, versión y año forman un grupo que no se reparte entre ambos. Dentro de entrenamiento se usa validación cruzada agrupada de cinco folds. Cambiar el fold: unas 2.570 filas ajustan y unas 643 validan. En cada ajuste se aprenden medianas, modas, escalas y categorías. El test no decide el modelo. La separación es aleatoria por grupos, no una prueba sobre un período futuro.
 
 **Transición:** «Veamos qué significa comparar fichas cercanas».

@@ -1,6 +1,6 @@
 # Demostración y preguntas de la presentación
 
-Esta guía acompaña al [guion de seis integrantes](../presentacion/guion.md). Los valores corresponden a los archivos de la base `1b05003`; revisar el [handoff](handoff-presentacion.md) antes de integrar cambios de Python. La diferencia de reproducción de validación cruzada sigue pendiente; las métricas de test y las predicciones sí coinciden.
+Esta guía acompaña al [guion de seis integrantes](../presentacion/guion.md). Los valores corresponden a la versión integrada de las ramas de presentación y revisión académica. La validación usa cinco folds por grupos mezclados con semilla 42 y guarda sus IDs. Se regeneraron las tablas; el nuevo MAE de CV se documenta en [integración](integracion-defensa.md).
 
 ## Preparación breve
 
@@ -31,7 +31,7 @@ Las fichas del selector son ejemplos del entrenamiento. La segunda corresponde a
 
 **¿Cuál es el baseline?** Repetir para todos la mediana del precio del entrenamiento: USD 8.500. Es una referencia simple. Su MAE de test fue USD 5.502,45. La mediana de la muestra limpia completa, USD 8.700, es un descriptivo distinto.
 
-**¿Cómo se eligió el modelo?** Se guardaron ocho configuraciones: mediana, lineal y k-NN con 5/15/35 vecinos y dos tipos de peso. Se eligió por el menor MAE medio en cinco folds del entrenamiento. Los CSV registran k-NN, 5 vecinos y distancia, MAE de CV USD 1.504,65. La reproducción local de esta revisión cambió esos MAE de CV, aunque mantuvo el ganador y el test. No afirmar reproducción completa hasta conciliarlo con la revisión de Python.
+**¿Cómo se eligió el modelo?** Se guardaron ocho configuraciones: mediana, lineal y k-NN con 5/15/35 vecinos y dos tipos de peso. Se eligió por el menor MAE medio en cinco folds del entrenamiento. Los CSV integrados registran k-NN, 5 vecinos y distancia, MAE de CV USD 1.536,72. Se usa GroupKFold con shuffle=True y semilla 42; cada grupo queda completo en un fold. Los IDs de cada partición permiten cotejar el reparto entre corridas. El cambio afecta la validación interna; el test y el modelo final coinciden con la versión anterior.
 
 **¿Para qué separar train, validación y test?** Entrenamiento ajusta los modelos; los folds comparan alternativas dentro de entrenamiento; el test reservado evalúa después de elegir. Hay 3.213 filas de entrenamiento y 831 de test, con semilla 42. Los grupos marca–modelo–versión–año no se comparten entre ajuste y evaluación. Es una separación aleatoria por grupos; no demuestra rendimiento en un mercado futuro.
 
@@ -52,3 +52,5 @@ Las fichas del selector son ejemplos del entrenamiento. La segunda corresponde a
 **¿Qué hace cada archivo?** `src/autos.py` implementa limpieza y aprendizaje en Python. El notebook lo usa y genera resultados. `presentacion/exportar.py` incorpora el modelo ajustado, tablas y figuras en la plantilla. `presentacion/modelo.js` reproduce las transformaciones y el cálculo; `app.js` valida y presenta. Abrir el HTML no entrena ni consulta Internet. La ficha permanece en memoria y no se guarda.
 
 **¿Qué mejoraríamos?** Datos más recientes, estado e historial, revisión de contradicciones y evaluación posterior en otra muestra. No sabemos el precio final de venta ni mostramos intervalos calibrados. Esas mejoras están propuestas, no implementadas ni medidas.
+
+**¿Cero grupos compartidos garantiza que sean vehículos diferentes?** No. Hay 14 fichas del test con los mismos 11 predictores crudos que alguna ficha de entrenamiento en otro grupo. La clave incluye la versión, que no entra como predictor. Son IDs distintos y el dataset no permite asegurar identidad física. Se informa ese límite; no se eliminan casos después de mirar los resultados para mejorar métricas.

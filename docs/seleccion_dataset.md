@@ -30,3 +30,9 @@ Quedan **4.044** publicaciones. Las correcciones de especificaciones se cuentan 
 ## Alcance
 
 Son precios publicados de un recorte de modelos y marcas. El modelo usa las características registradas y trata los datos opcionales desconocidos mediante imputación. Estado, historial de mantenimiento, precio de venta final y condiciones actuales de mercado quedan fuera del estimador.
+
+## Diagnóstico y límites en la versión integrada
+
+El notebook muestra tipos y celdas vacías antes de limpiar. Los campos opcionales faltantes se imputan dentro del Pipeline de cada fold; los obligatorios del formulario se solicitan al usuario. La fecha de actualización del paquete no es una fecha individual de publicación; no se construye una serie temporal a partir del año del auto.
+
+Se conservan las reglas de selección y la huella del CSV de ambas ramas. Hay 14 fichas de prueba con los mismos predictores crudos que alguna de entrenamiento aunque la clave de grupos difiera. La versión del vehículo forma parte del grupo, pero no del vector predictivo. Los IDs identifican avisos; no garantizan distinguir vehículos físicos repetidos. Este límite se conserva y se informa sin retirar filas en función de su error.

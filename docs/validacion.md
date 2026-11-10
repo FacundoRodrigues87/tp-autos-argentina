@@ -1,30 +1,35 @@
-# Verificación de la entrega
+# Verificación de la versión integrada
 
-## Reproducción y separación
+Se integraron presentación (90ec4e3) y revisión académica (27a524c), ambas desde 1b05003. La ejecución conjunta se hizo en macOS ARM64 con Python 3.12.14 y las versiones de requirements.txt. pip check pasó.
 
-Se creó un entorno nuevo con Python 3.11 y `requirements.txt`. Se ejecutaron los 11 bloques de código de `TP_autos.ipynb` en orden y se validó el archivo con nbformat. La carga verificó la huella SHA-256 del CSV original. La limpieza dejó 4.044 IDs únicos y regeneró los gráficos y las tablas.
+## Notebook y separación
 
-La partición con semilla 42 asignó 3.213 avisos a entrenamiento y 831 a prueba (20,55 %). Se comprobaron cero grupos compartidos entre entrenamiento y prueba, y cero entre ajuste y validación en los cinco folds. El grupo combina marca, modelo, versión y año. El criterio de selección fue el MAE medio de validación.
+Se ejecutaron las 11 celdas de código de TP_autos.ipynb en orden, sin errores, y se validó el archivo con nbformat. El CSV conserva la huella original. Permanecen 4.044 avisos, con 3.213 en entrenamiento y 831 en test. No hay IDs ni claves marca/modelo/versión/año compartidos entre esos conjuntos ni entre ajuste y validación.
 
-| Modelo | MAE de validación (USD) | MAE de prueba (USD) | RMSE de prueba (USD) | R² de prueba |
-| --- | ---: | ---: | ---: | ---: |
-| Mediana | 4.603,68 | 5.502,45 | 9.523,42 | -0,1384 |
-| Regresión lineal | 1.954,97 | 2.242,45 | 4.251,97 | 0,7731 |
-| k-NN, 5 vecinos por distancia | 1.504,65 | 1.499,30 | 2.735,57 | 0,9061 |
+La validación usa GroupKFold con shuffle=True y semilla 42. Se guardan todos los IDs de ajuste y validación por fold, además de los de train/test. Cada grupo queda completo en un fold y cada fila de train se valida una vez. Los tamaños de validación son 640, 674, 634, 648 y 617: se mezclan grupos completos, no se exige igual cantidad de filas.
 
-Se contrastaron las métricas exportadas al HTML con los CSV del notebook. La presentación usa los mismos valores con el redondeo indicado por cada formato. [Métricas completas](../resultados/metricas.csv) · [Ocho configuraciones](../resultados/validacion_cruzada.csv) · [Particiones](../resultados/particiones.json)
+La selección repetida en una segunda corrida local reprodujo los MAE de CV guardados con tolerancia absoluta de USD 1e-8. El protocolo de CV cambió respecto de las ramas iniciales: no se atribuye esa diferencia a una mejora del modelo. El test reservado, el ganador k-NN con cinco vecinos por distancia y sus 831 predicciones permanecen iguales.
 
-## Estimador
+| Modelo | MAE CV (USD) | MAE test (USD) | RMSE test (USD) | R² test |
+|---|---:|---:|---:|---:|
+| Baseline mediana | 4.610,23 | 5.502,45 | 9.523,42 | -0,1384 |
+| Regresión lineal | 1.985,46 | 2.242,45 | 4.251,97 | 0,7731 |
+| k-NN | 1.536,72 | 1.499,30 | 2.735,57 | 0,9061 |
 
-- Se comparó el modelo ganador en Python y Chromium con 51 fichas válidas, incluidas fichas completas, con cambios de kilometraje y con opcionales omitidos. También se cotejaron las 831 predicciones de prueba. La tolerancia fue de USD 0,00000001. Se verificó por separado la ruta de exportación y cálculo de la regresión lineal.
-- Se probaron una combinación marca–modelo incompatible, una categoría ajena al entrenamiento, campos obligatorios vacíos, kilómetros negativos, año imposible, puertas fuera de rango y cantidades fraccionarias para campos enteros.
-- El Volkswagen Up! 2014 con 108.000 km, Nafta y Manual estima USD 7.927,05 con los cinco opcionales vacíos. Se comprobó el mismo importe en la consola y el formulario.
-- El desempate de k-NN mantiene el orden de los registros de entrenamiento. Esto permite repetir la selección de vecinos cuando hay distancias iguales.
+## Pruebas conjuntas
 
-## HTML autónomo
+Pasaron siete pruebas de unittest: integridad y limpieza; disjunción y cobertura de folds; ajuste de transformaciones solo dentro de train; coincidencias y empates; IDs comparados con la corrida guardada; ejemplos estables compartidos entre Python y exportador; exportación y paridad del cálculo JavaScript.
 
-Se abrió `presentacion.html` con Chromium desde una URL `file://` y con la red desactivada. Se recorrieron y revisaron visualmente las trece secciones a 1440 × 900 y 390 × 844. Se probaron los selectores de transformación, fold, dispersión, métrica, caso de prueba y segmento, la revelación de vecinos, el formulario y los estados de error. La página no produjo errores de JavaScript, solicitudes de red ni desplazamiento horizontal del documento. Se comprobaron las animaciones con el movimiento habilitado y la ausencia de desborde del documento a 320 px.
+Chromium abrió el HTML real por file:// con la red desactivada. El verificador comparó 831 predicciones de test y 887 fichas válidas contra Python: diferencia máxima USD 0, con tolerancia requerida de 1e-8. Verificó 24 entradas inválidas, cuatro casos de coincidencias/empates y las rutas alternativas de mediana y regresión lineal.
 
-## Lectura de resultados
+Pasaron controles de las trece secciones, todos los selectores, vecinos, envío, limpieza, eventos input/change, mensajes, foco, Tab/Enter/Escape, navegación sin nuevas pestañas y movimiento reducido. Se probaron escritorio 1440×900, tamaños móviles 390×844 y 320×844, toque emulado y texto ampliado. No hubo errores JavaScript ni solicitudes HTTP. Se revisaron visualmente capturas de métricas, estimador, conclusiones y explicación inicial en escritorio/móvil. No se comprobó un teléfono físico ni otros navegadores.
 
-Los avisos del tercil alto tuvieron un MAE de USD 2.659,07 y un sesgo de −USD 607,40. Los avisos de hasta cinco años tuvieron un MAE de USD 3.054,73. El modelo subestimó el Fiat Uno 1994 publicado a USD 29.000 por unos USD 21.483. Las métricas describen la capacidad de aproximar precios pedidos en este recorte histórico. [Errores por segmento](../resultados/errores_segmentos.csv)
+La consola devolvió USD 7.927,05 para Volkswagen Up! 2014, 108.000 km, Nafta y Manual con opcionales vacíos. Los ejemplos se fijan por ID desde una única función de Python, que también usa el exportador.
+
+## Límites que siguen vigentes
+
+Hay 14 fichas de test con los mismos 11 predictores crudos que alguna ficha de train en otro grupo. La versión integra la clave pero no X: cero grupos compartidos no garantiza vehículos físicos distintos. Se informa ese límite sin retirar filas en función de sus errores.
+
+Las métricas comparan precios pedidos históricos en un recorte de usados en USD. No validan precios finales de venta, datos actuales ni todos los vehículos posibles. Persisten las contradicciones del aviso Ka/Focus y las limitaciones de cobertura. El MAE no es un intervalo de confianza. En esta integración no se repitió la corrida completa en Windows; los IDs registrados permiten cotejarla.
+
+Ver [integración y reproducción](integracion-defensa.md), [matriz académica](alineacion-materia.md) y los handoffs históricos.

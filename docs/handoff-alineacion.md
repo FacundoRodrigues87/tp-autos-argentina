@@ -1,5 +1,7 @@
 # Handoff de la revisión académica
 
+> Registro histórico de esa rama. El estado actual, los cambios de validación cruzada y las pruebas conjuntas están en [integración de la defensa](integracion-defensa.md).
+
 | Referencia | SHA |
 | --- | --- |
 | Base exacta de `codex/autos-meli-arg` | `1b05003f3ece1fde18c8bd218a4cc78cb212278c` |

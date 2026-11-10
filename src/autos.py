@@ -203,18 +203,26 @@ def separar(d):
     train_groups, test_groups = groups[train], groups[test]
     shared = len(np.intersect1d(train_groups, test_groups))
     assert shared == 0
-    folds = list(GroupKFold(n_splits=5).split(d.iloc[train], groups=train_groups))
+    # Mezclar grupos con semilla evita depender del orden de empates de tamaños
+    # de la asignación sin shuffle. No se mezclan filas de un mismo grupo.
+    folds = list(GroupKFold(n_splits=5, shuffle=True, random_state=SEED)
+                 .split(d.iloc[train], groups=train_groups))
     fold_details = []
     for i, (fit, val) in enumerate(folds, start=1):
         overlap = len(np.intersect1d(train_groups[fit], train_groups[val]))
         assert overlap == 0
         fold_details.append({"fold": i, "ajuste": len(fit), "validacion": len(val),
-                             "grupos_compartidos": overlap})
+                             "grupos_compartidos": overlap,
+                             "ids_ajuste": d.iloc[train[fit]]["id"].tolist(),
+                             "ids_validacion": d.iloc[train[val]]["id"].tolist()})
     detail = {
         "semilla": SEED, "variables_grupo": GROUP,
         "train": len(train), "test": len(test), "fraccion_test": len(test) / len(d),
         "grupos_train": len(np.unique(train_groups)), "grupos_test": len(np.unique(test_groups)),
         "grupos_compartidos": shared, "folds": fold_details,
+        "estrategia_cv": "GroupKFold con shuffle=True y random_state=42",
+        "ids_train": d.iloc[train]["id"].tolist(),
+        "ids_test": d.iloc[test]["id"].tolist(),
     }
     return Particiones(d.iloc[train].reset_index(drop=True),
                        d.iloc[test].reset_index(drop=True), folds, detail)
@@ -327,15 +335,14 @@ def estimar(model, options, values):
 
 
 def ejemplos(train):
-    complete = train.dropna(subset=FEATURES)
-    brands = train["brand"].value_counts().head(3).index
-    result = []
-    for i, brand in enumerate(brands):
-        subset = complete.loc[complete["brand"].eq(brand)].sort_values("km")
-        row = subset.iloc[len(subset) // 2]
-        fields = FEATURES if i != 1 else REQUIRED
-        result.append({"id": row["id"], "vehiculo": row[fields].to_dict()})
-    return result
+    """Fichas de la defensa fijadas por ID, compartidas con el exportador."""
+    ids = ["MLA1402454175", "MLA1546276856", "MLA1640255410"]
+    rows = train.set_index("id")
+    if not set(ids).issubset(rows.index):
+        raise ValueError("Una ficha de demostración ya no está en train; revisá sus IDs.")
+    return [{"id": identifier,
+             "vehiculo": rows.loc[identifier, FEATURES if i != 1 else REQUIRED].to_dict()}
+            for i, identifier in enumerate(ids)]
 
 
 def guardar(calidad, partitions, winner, searches, cv, metrics, cases, segments, cuts):
