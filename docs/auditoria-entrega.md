@@ -51,8 +51,10 @@ La preparación independiente del modelo reprodujo el MAE de validación, el gan
 
 El mensaje del profesor permite entregar el notebook o, preferentemente, el enlace a GitHub. La consigna pide también los datos o su enlace. El repositorio incluye notebook, CSV, fuente, código auxiliar e instrucciones. La presentación es opcional y se incluye para la defensa.
 
-La consigna guardada fija **10/11/2026 a las 23:59** para entregar y **11/11/2026** para defender. Una prórroga requiere confirmación en la tarea del campus.
+La tarea de Teams, cuyo contenido compartió el grupo el 10/11/2026, fija la entrega vigente para el **11/11/2026 a las 14:00 (hora argentina)** y permite múltiples envíos. Esta fecha actualiza el plazo del documento original. La defensa está prevista para el **11/11/2026**.
 
-El repositorio se comprobó privado mediante GitHub. Falta identificar la cuenta del docente para verificar su permiso. El enlace privado por sí solo no acredita acceso. También quedan a cargo del grupo la carga en la tarea, la asignación de los seis bloques, el ensayo oral y confirmar la excepción para seis integrantes si aún no fue acordada.
+El mensaje vigente pide notebook o enlace a GitHub, organización y documentación, ejecución correcta, instrucciones de acceso al dataset público y fuente visible. La presentación HTML o PowerPoint es opcional. La defensa dura 20–25 minutos incluyendo preguntas y requiere participación de todos. La nota es individual y contempla producción técnica grupal, claridad de exposición y dominio del código, particularmente preprocesamiento, EDA, visualización y modelado.
+
+El repositorio se comprobó privado mediante GitHub. El grupo confirmó que todavía no dispone del usuario de GitHub del docente; queda pendiente identificarlo para verificar su permiso. El enlace privado por sí solo no acredita acceso. También quedan a cargo del grupo la carga en la tarea, la asignación de los seis bloques, el ensayo oral y confirmar la excepción para seis integrantes si aún no fue acordada.
 
 Esta revisión verifica el producto técnico dentro del alcance documentado. La calificación incluye el dominio y la exposición de cada integrante.

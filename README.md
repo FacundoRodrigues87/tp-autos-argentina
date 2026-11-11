@@ -57,6 +57,6 @@ Se reemplazó el reparto interno sin mezcla por GroupKFold con shuffle=True y se
 
 Entregar el enlace al repositorio y comprobar que el docente pueda abrirlo: actualmente es privado. Si se entrega un archivo, el notebook necesita también el código, el CSV y los metadatos del proyecto. La fuente pública y las instrucciones están en el notebook.
 
-La [auditoría final](docs/auditoria-entrega.md) registra la ejecución limpia en macOS, las siete pruebas y la comparación Python–JavaScript. La consigna fija entrega el **10/11/2026 a las 23:59** y defensa el **11/11/2026**, salvo cambio confirmado por el docente.
+La [auditoría final](docs/auditoria-entrega.md) registra la ejecución limpia en macOS, las siete pruebas y la comparación Python–JavaScript. La tarea de Teams compartida por el grupo fija la entrega vigente para el **11/11/2026 a las 14:00 (hora argentina)** y permite múltiples envíos. Esta fecha actualiza la del documento original. La defensa está prevista para el **11/11/2026**.
 
 El guion reserva 19 minutos de exposición y 3–5 de preguntas (22–24 en total). Asignar los seis bloques a nombres reales y confirmar la excepción para seis integrantes. Todos deben poder explicar cualquier parte, no solo su bloque. Consultar la [revisión de entrega](docs/auditoria-entrega.md).
