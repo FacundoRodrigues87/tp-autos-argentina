@@ -113,6 +113,10 @@ section {
 .cover .note {
   font-size: 0.94rem;
 }
+.cover .integrantes {
+  max-width: 72ch;
+  margin-top: 28px;
+}
 .cover h1 + p {
   font-size: clamp(1.15rem, 2.2vw, 1.5rem);
 }

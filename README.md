@@ -2,6 +2,8 @@
 
 TP integrador de Python para Ciencia de Datos, UADE. Estimamos en USD el precio de publicación de un vehículo usado a partir de avisos históricos de Mercado Libre Argentina.
 
+**Integrantes** · Facundo Rodrigues, Mateo Gimenez, Lautaro Acosta, Lucas Insabralde, Matias Sevilla y Bruno Herzig.
+
 - [TP_autos.ipynb](TP_autos.ipynb) contiene el análisis ejecutado.
 - [Alineación con la materia](docs/alineacion-materia.md) e [integración](docs/integracion-defensa.md) documentan decisiones y verificaciones.
 - [Datos y limpieza](docs/seleccion_dataset.md) documenta la procedencia y las reglas aplicadas. [Validación](docs/validacion.md) reúne los controles de entrega.

@@ -37,6 +37,10 @@
             características y de avisos históricos de Mercado Libre Argentina.</p
           >
           <p class="note">Datos con actualización de febrero de 2024 · Precios pedidos, en USD</p>
+          <p class="note integrantes">
+            Facundo Rodrigues · Mateo Gimenez · Lautaro Acosta · Lucas Insabralde · Matias Sevilla ·
+            Bruno Herzig
+          </p>
         </div>
       </section>
       <section id="problema" aria-labelledby="h-problema">
