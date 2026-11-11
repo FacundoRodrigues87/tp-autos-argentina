@@ -2,8 +2,6 @@
 
 Una vez generado el archivo local `presentacion.html`, abrilo con doble clic en un navegador. El archivo autónomo contiene las trece secciones, figuras del notebook, datos y estimador. Funciona sin conexión; el enlace externo a Kaggle requiere red. No guarda ni envía las fichas. En móvil se necesita un navegador que ejecute JavaScript local, no solo la vista previa del archivo.
 
-**Para exponer:** [guion de seis integrantes](guion.md) · [demostración y preguntas](../docs/demostracion-presentacion.md). **Para integrar esta revisión:** [handoff](../docs/handoff-presentacion.md).
-
 El menú **Recorrido** y los enlaces **Anterior/Siguiente** permiten moverse entre secciones. Tab y Enter operan los controles; Escape cierra el recorrido. Los enlaces internos desplazan la página y llevan el foco al título. Las tablas y las figuras grandes admiten desplazamiento con teclado. La página respeta el movimiento reducido del sistema.
 
 El formulario distingue seis campos obligatorios y cinco opcionales. El resultado y su detalle desaparecen al modificar cualquier campo, cambiar de ficha o limpiar. Los errores se muestran al pulsar **Estimar precio** y el foco va al primer campo inválido; si es opcional se abre su panel. La explicación inicial permanece visible antes de estimar. El detalle técnico usa parámetros exportados y un fragmento real de Python.

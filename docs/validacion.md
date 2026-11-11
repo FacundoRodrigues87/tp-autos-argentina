@@ -32,4 +32,4 @@ Hay 14 fichas de test con los mismos 11 predictores crudos que alguna ficha de t
 
 Las métricas comparan precios pedidos históricos en un recorte de usados en USD. No validan precios finales de venta, datos actuales ni todos los vehículos posibles. Persisten las contradicciones del aviso Ka/Focus y las limitaciones de cobertura. El MAE no es un intervalo de confianza. En esta integración no se repitió la corrida completa en Windows; los IDs registrados permiten cotejarla.
 
-Ver [integración y reproducción](integracion-defensa.md), [matriz académica](alineacion-materia.md) y los handoffs históricos.
+Ver [integración y reproducción](integracion-defensa.md) y [matriz académica](alineacion-materia.md).

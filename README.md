@@ -2,8 +2,8 @@
 
 TP integrador de Python para Ciencia de Datos, UADE. Estimamos en USD el precio de publicación de un vehículo usado a partir de avisos históricos de Mercado Libre Argentina.
 
-- [TP_autos.ipynb](TP_autos.ipynb) contiene el análisis ejecutado. El [guion](presentacion/guion.md) distribuye la exposición entre seis integrantes.
-- [Alineación con la materia](docs/alineacion-materia.md), [handoff académico](docs/handoff-alineacion.md) e [integración](docs/integracion-defensa.md) documentan decisiones y verificaciones.
+- [TP_autos.ipynb](TP_autos.ipynb) contiene el análisis ejecutado.
+- [Alineación con la materia](docs/alineacion-materia.md) e [integración](docs/integracion-defensa.md) documentan decisiones y verificaciones.
 - [Datos y limpieza](docs/seleccion_dataset.md) documenta la procedencia y las reglas aplicadas. [Validación](docs/validacion.md) reúne los controles de entrega.
 
 El CSV de origen contiene 10.191 avisos y 25 columnas. El recorte de usados en USD tiene 4.047 filas antes de limpiar y 4.044 después. Ganó **k-NN con 5 vecinos ponderados por distancia**. En los 831 avisos de prueba obtuvo **MAE de USD 1.499,30**, **RMSE de USD 2.735,57** y **R² de 0,9061**. Las métricas comparan la estimación con el precio pedido en la muestra histórica.
@@ -58,5 +58,3 @@ Se reemplazó el reparto interno sin mezcla por GroupKFold con shuffle=True y se
 Entregar el enlace al repositorio y comprobar que el docente pueda abrirlo: actualmente es privado. Si se entrega un archivo, el notebook necesita también el código, el CSV y los metadatos del proyecto. La fuente pública y las instrucciones están en el notebook.
 
 La [auditoría final](docs/auditoria-entrega.md) registra la ejecución limpia en macOS, las siete pruebas y la comparación Python–JavaScript. La tarea de Teams compartida por el grupo fija la entrega vigente para el **11/11/2026 a las 14:00 (hora argentina)** y permite múltiples envíos. Esta fecha actualiza la del documento original. La defensa está prevista para el **11/11/2026**.
-
-El guion reserva 19 minutos de exposición y 3–5 de preguntas (22–24 en total). Asignar los seis bloques a nombres reales y confirmar la excepción para seis integrantes. Todos deben poder explicar cualquier parte, no solo su bloque. Consultar la [revisión de entrega](docs/auditoria-entrega.md).

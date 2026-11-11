@@ -17,8 +17,8 @@ Base revisada: commit de Mateo `27f19d6`. Esta revisión actualiza la auditoría
 | Evaluación | MAE, RMSE y R², comparación con baseline, errores individuales y por segmentos. |
 | Conclusiones | Notebook §8. Hallazgos, desempeño, límites y mejoras propuestas. |
 | Notebook legible y ejecutable | Explicaciones restauradas, instrucciones completas y resultados guardados. Necesita los archivos auxiliares del repositorio. |
-| Presentación opcional | HTML autónomo con trece secciones y estimador, más guion de seis bloques. |
-| Defensa de 20–25 minutos | Guion de 19 minutos más 3–5 de preguntas. El ensayo y la comprensión individual corresponden al grupo. |
+| Presentación opcional | HTML autónomo con trece secciones y estimador. |
+| Defensa de 20–25 minutos | La defensa incluye preguntas del docente. El ensayo y la comprensión individual corresponden al grupo. |
 
 ## Alineación y decisiones de simplificación
 
