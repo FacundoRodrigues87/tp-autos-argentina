@@ -15,8 +15,12 @@ La fuente es el dataset público [Cars publications prices - MercadoLibreARG, de
 
 ## Cómo ejecutar el notebook
 
-1. Descargá el repositorio y abrí su carpeta en VS Code o Jupyter. El notebook y el CSV deben quedar juntos.
+1. Usá **Python 3.12**. Descargá el repositorio y abrí su carpeta en VS Code (con las extensiones Python y Jupyter) o en Jupyter. El notebook y el CSV deben quedar juntos.
 2. En el entorno que vas a usar como kernel, instalá las dependencias con `python -m pip install -r requirements.txt` (o `python3 -m pip install -r requirements.txt` si tu sistema usa ese comando).
 3. Abrí `TP_autos.ipynb`, seleccioná ese entorno como kernel y ejecutá todas las celdas en orden.
+
+## Alcance del resultado
+
+Los precios son históricos. En la división por filas, 74 de los 809 avisos de prueba tienen la misma ficha numérica que alguno de entrenamiento, con IDs distintos. La evaluación representa avisos de la misma fuente. `SimpleImputer` es una adaptación para completar faltantes con la mediana dentro de cada ronda de validación.
 
 La ejecución guardada se verificó con Python 3.12 y scikit-learn 1.8.0 en macOS. En caso de empate en la distancia, la selección de vecinos puede variar entre compilaciones de scikit-learn.
