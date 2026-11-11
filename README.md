@@ -10,7 +10,7 @@ El CSV de origen contiene 10.191 avisos y 25 columnas. El recorte de usados en U
 
 ## Reproducir en Windows
 
-Desde la carpeta del proyecto, con Python 3.12. El notebook y el estimador se comprobaron en Windows con Python 3.12.13.
+Descargá el repositorio completo desde **Code → Download ZIP**, descomprimilo y abrí una terminal dentro de esa carpeta. Se necesita Python 3.12. El CSV está incluido, por lo que la ejecución posterior a instalar las dependencias funciona sin conexión. Mateo comprobó la versión base en Windows con Python 3.12.13.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -21,7 +21,22 @@ py -3.12 -m venv .venv
 .venv/Scripts/python.exe -m presentacion.exportar
 ```
 
-En macOS o Linux, creá el entorno con `python3.12 -m venv .venv` y usá `.venv/bin/python` en los demás comandos. El notebook escribe las tablas, los gráficos y el modelo local en `resultados/`. Podés consultar los campos opcionales del estimador con `estimar.py --help`.
+## Reproducir en macOS o Linux
+
+Desde la carpeta descomprimida, con Python 3.12:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m ipykernel install --prefix .venv --name tp-autos --display-name "TP Autos"
+.venv/bin/python -m nbconvert --execute --to notebook --inplace --ExecutePreprocessor.kernel_name=tp-autos TP_autos.ipynb
+.venv/bin/python estimar.py --marca Volkswagen --modelo 'Up!' --anio 2014 --km 108000 --combustible Nafta --transmision Manual
+.venv/bin/python -m presentacion.exportar
+```
+
+El notebook escribe las tablas, los gráficos y el modelo local en `resultados/`. GitHub permite leer el notebook con sus resultados guardados. Podés consultar los campos opcionales del estimador con `estimar.py --help`.
+
+La fuente pública es [Cars publications prices MercadoLibreArg, de Ariel Rasgido](https://www.kaggle.com/datasets/arielras/cars-publications-prices-mercadolibrearg). Si falta el CSV, descargá el ZIP de Kaggle y copiá `MeliCarPublicactionsCSV/MeliCarPublicactions.csv` a `data/raw/MeliCarPublicactions.csv`. La fuente, el alcance histórico y las reglas de limpieza se detallan en [selección del dataset](docs/seleccion_dataset.md).
 
 ## Cómo leer el código
 
@@ -41,5 +56,7 @@ Se reemplazó el reparto interno sin mezcla por GroupKFold con shuffle=True y se
 ## Entrega y defensa
 
 Entregar el enlace al repositorio y comprobar que el docente pueda abrirlo: actualmente es privado. Si se entrega un archivo, el notebook necesita también el código, el CSV y los metadatos del proyecto. La fuente pública y las instrucciones están en el notebook.
+
+La [auditoría final](docs/auditoria-entrega.md) registra la ejecución limpia en macOS, las siete pruebas y la comparación Python–JavaScript. La consigna fija entrega el **10/11/2026 a las 23:59** y defensa el **11/11/2026**, salvo cambio confirmado por el docente.
 
 El guion reserva 19 minutos de exposición y 3–5 de preguntas (22–24 en total). Asignar los seis bloques a nombres reales y confirmar la excepción para seis integrantes. Todos deben poder explicar cualquier parte, no solo su bloque. Consultar la [revisión de entrega](docs/auditoria-entrega.md).

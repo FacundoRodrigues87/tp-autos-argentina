@@ -190,6 +190,19 @@ El resultado es una referencia sobre precios publicados históricos. Para mejora
 
 El notebook, el dataset, la fuente y las instrucciones están en el repositorio. Con esto cerramos la presentación y quedamos disponibles para las preguntas.”
 
+## Respuestas breves para practicar entre todos
+
+- **¿Por qué esos datos?** Son públicos, tienen números y categorías y permiten estudiar una pregunta concreta sobre el precio publicado.
+- **¿Por qué limpiar?** Para que los cálculos utilicen datos comparables. Por ejemplo, convertimos kilómetros escritos como texto y descartamos un precio que representaba un anticipo.
+- **¿Por qué mediana?** Resume el valor central y es menos sensible que la media a precios muy altos. La usamos como referencia simple del entrenamiento.
+- **¿Por qué separar los datos?** Necesitamos evaluar con avisos que no participaron en el ajuste. Elegimos las opciones del modelo usando validación dentro del entrenamiento.
+- **¿Por qué escalar?** Los kilómetros y el año tienen magnitudes diferentes. Escalar permite compararlos al calcular distancias.
+- **¿Qué significa cinco vecinos?** Para estimar buscamos cinco fichas cercanas y combinamos sus precios, dando más peso a las más próximas.
+- **¿Qué gráfico explica mejor el resultado?** El de precio publicado frente a estimado. Los puntos próximos a la diagonal tienen menos error y los alejados muestran casos para revisar.
+- **¿Qué aprendimos?** El modelo mejoró la referencia simple en esta muestra, pero tiene errores importantes y usa precios históricos de publicación.
+
+Si preguntan por las adaptaciones adicionales, la [guía de defensa](../docs/guia_defensa.md) explica con ejemplos los indicadores de categorías, la separación por grupos y los empates.
+
 ## Preparación del grupo — no leer en la exposición
 
 - Practicar con el HTML abierto: señalar los gráficos y explicar lo que se ve. No memorizar cifras sin entenderlas.

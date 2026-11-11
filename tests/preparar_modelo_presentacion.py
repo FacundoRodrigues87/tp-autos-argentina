@@ -32,8 +32,9 @@ def main():
     assert ganador == particion['modelo_elegido']
     assert busquedas[ganador].best_params_ == particion['parametros']
     assert casos.id.tolist() == casos_referencia.id.tolist()
-    np.testing.assert_allclose(metricas[['MAE_test', 'RMSE_test', 'R2_test']],
-                               referencia[['MAE_test', 'RMSE_test', 'R2_test']], atol=1e-8, rtol=0)
+    columnas_metricas = ['MAE_CV', 'MAE_test', 'RMSE_test', 'R2_test']
+    np.testing.assert_allclose(metricas[columnas_metricas],
+                               referencia[columnas_metricas], atol=1e-8, rtol=0)
     np.testing.assert_allclose(casos.precio_estimado, casos_referencia.precio_estimado, atol=1e-8, rtol=0)
     argumentos.salida.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({'nombre': ganador, 'modelo': busquedas[ganador].best_estimator_,

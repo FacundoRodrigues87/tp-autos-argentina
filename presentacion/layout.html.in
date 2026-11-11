@@ -102,7 +102,7 @@
         <div class="wrap">
           <div class="split chart-split">
             <div>
-              <h2 id="h-distribucion">Cómo se distribuyen los precios</h2>
+              <h2 id="h-distribucion">Los precios altos elevan la media</h2>
               <p id="price-copy"></p>
               <dl class="compact-stats" id="price-stats"></dl>
             </div>
@@ -128,8 +128,7 @@
                   alt="Histogramas y boxplots de precio y kilometraje de la muestra limpia"
                   loading="lazy" /></div
               ><figcaption
-                >resultados/01_univariado.png · Los puntos del boxplot muestran valores alejados de
-                los cuartiles; no se excluyen solo por ser extremos.</figcaption
+                >Los boxplots permiten reconocer valores extremos y comparar la dispersión de precios y kilómetros.</figcaption
               ></figure
             >
           </details>
@@ -139,7 +138,7 @@
         <div class="wrap">
           <div class="split chart-split">
             <div>
-              <h2 id="h-relaciones">Qué se relaciona con el precio</h2>
+              <h2 id="h-relaciones">Una característica no alcanza</h2>
               <label for="relation-choice">Comparar el precio con</label>
               <select id="relation-choice">
                 <option value="car_year">Año de fabricación</option>
@@ -178,8 +177,7 @@
                     alt="Mapa de correlaciones de Pearson entre precio y variables numéricas"
                     loading="lazy" /></div
                 ><figcaption
-                  >resultados/03_correlacion.png · Asociación lineal entre pares
-                  disponibles.</figcaption
+                  >Correlaciones de Pearson entre las variables numéricas disponibles.</figcaption
                 ></figure
               >
               <figure
@@ -193,8 +191,7 @@
                     alt="Mediana del precio publicado por marca"
                     loading="lazy" /></div
                 ><figcaption
-                  >resultados/04_marcas.png · Medianas calculadas con groupby y agg en el notebook.
-                  Cada marca mezcla modelos, años y kilómetros distintos.</figcaption
+                  >Medianas por marca calculadas con groupby y agg. Cada marca reúne modelos, años y kilómetros distintos.</figcaption
                 ></figure
               >
             </div>
@@ -252,8 +249,8 @@
             <select id="fold-choice"></select>
             <div id="fold-demo" class="partition" aria-live="polite"></div>
             <p class="note"
-              >En cada partición, el bloque de ajuste aprende la imputación, el escalado y la
-              codificación one-hot.</p
+              >Los valores para completar faltantes y preparar las características se calculan
+              usando únicamente el bloque de ajuste de cada ronda.</p
             >
           </div>
         </div>
@@ -263,9 +260,8 @@
           <h2 id="h-vecinos">Cómo estima k-NN</h2>
           <p id="neighbor-intro"></p>
           <p
-            >Buscamos las distancias euclídeas más chicas después de escalar los números y codificar
-            las categorías. El aporte de cada vecino es su precio multiplicado por su peso
-            normalizado.</p
+            >Preparamos las características para compararlas y buscamos los cinco avisos más cercanos.
+            Los más parecidos tienen mayor peso en el promedio de precios.</p
           >
           <div class="controls">
             <button type="button" id="reveal-neighbor">Mostrar próximo vecino</button>

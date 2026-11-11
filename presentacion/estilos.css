@@ -8,7 +8,7 @@
   --fondo-suave: #e5efea;
   --borde: #becdc6;
   --error: #9d2e25;
-  --radio: 8px;
+  --radio: 12px;
   --curva-animacion: cubic-bezier(0.23, 1, 0.32, 1);
   font-family: "Segoe UI", system-ui, sans-serif;
 }
@@ -40,7 +40,7 @@ a {
   display: none !important;
 }
 .wrap {
-  width: min(100% - 64px, 1152px);
+  width: min(100% - 64px, 1240px);
   margin-inline: auto;
 }
 .top {
@@ -90,18 +90,31 @@ section {
 .cover {
   display: grid;
   align-items: center;
-  min-height: min(670px, 80svh);
-  background: var(--fondo-suave);
+  min-height: min(700px, 84svh);
+  background: var(--acento-oscuro);
+  color: #fff;
 }
 .cover .wrap {
   position: relative;
   padding-block: 28px 36px;
-  border-block: 1px solid var(--borde);
 }
-.cover p:last-child {
+.cover p {
   max-width: 54ch;
-  color: var(--texto-secundario);
-  font-size: clamp(1.13rem, 2.2vw, 1.48rem);
+  color: #e4f1ec;
+}
+.cover .eyebrow,
+.cover .section-number,
+.cover a {
+  color: #fff;
+}
+.cover .section-pager {
+  border-color: #62998f;
+}
+.cover .note {
+  font-size: 0.94rem;
+}
+.cover h1 + p {
+  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
 }
 h1,
 h2,
@@ -153,7 +166,8 @@ figcaption {
   gap: clamp(24px, 6vw, 88px);
 }
 .chart-split {
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.24fr);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+  gap: clamp(24px, 4vw, 52px);
 }
 dl {
   margin: 0;
@@ -181,8 +195,10 @@ dd {
 }
 .figures > div,
 .algorithms > div {
-  padding-top: 14px;
-  border-top: 1px solid var(--borde);
+  padding: 24px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: #fff;
 }
 .figures dt {
   font-size: clamp(1.9rem, 3.6vw, 3.2rem);
@@ -206,6 +222,10 @@ dd {
   border-radius: var(--radio);
 }
 .standout {
+  padding: 18px 22px;
+  border-left: 4px solid var(--acento);
+  background: var(--fondo-suave);
+  border-radius: 0 var(--radio) var(--radio) 0;
   font-size: clamp(1.17rem, 2vw, 1.5rem);
   color: var(--acento-oscuro);
   font-weight: 680;
@@ -317,6 +337,10 @@ figcaption {
 .chart {
   min-width: 0;
   color: var(--texto-secundario);
+  padding: 16px 12px 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: #fff;
 }
 .chart svg {
   display: block;
@@ -422,7 +446,7 @@ figcaption {
   font-size: 0.91rem;
 }
 .bar-row {
-  margin-bottom: 14px;
+  margin-bottom: 26px;
 }
 .bar-label {
   display: flex;
@@ -432,8 +456,10 @@ figcaption {
 }
 .bar-track {
   position: relative;
-  height: 13px;
-  margin-top: 5px;
+  height: 20px;
+  margin-top: 8px;
+  border-radius: 4px;
+  overflow: hidden;
   background: var(--fondo-suave);
 }
 .bar-track i {
@@ -484,6 +510,10 @@ form button {
 }
 [aria-invalid="true"] {
   border-color: var(--error);
+}
+.estimate-panel {
+  border: 1px solid var(--borde);
+  border-top: 4px solid var(--acento);
 }
 .estimate-panel p {
   margin-bottom: 8px;
@@ -650,6 +680,9 @@ section {
   border-top: 1px solid var(--borde);
 }
 .section-pager a {
+  padding: 8px 12px;
+  border-radius: var(--radio);
+  font-weight: 650;
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -844,5 +877,71 @@ code {
 @media print {
   .figure-scroll img {
     min-width: 0;
+  }
+}
+
+/* Jerarquía de lectura para exposición en pantalla */
+#datos, #algoritmos, #metricas {
+  background: #edf3ef;
+}
+#metric-chart {
+  padding: clamp(18px, 3vw, 32px);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: #fff;
+}
+.compact-stats > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.compact-stats dt {
+  font-size: 1.45rem;
+  color: var(--acento-oscuro);
+  font-variant-numeric: tabular-nums;
+}
+.compact-stats dd {
+  color: var(--texto-secundario);
+  text-align: right;
+}
+.estimator-guide {
+  padding: clamp(20px, 3vw, 32px);
+  border: 1px solid var(--borde);
+  border-top: 3px solid var(--acento);
+  border-radius: var(--radio);
+  background: #fff;
+}
+@media (max-width: 767px) {
+  .figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .figures > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+  }
+  .figures dd {
+    text-align: right;
+  }
+  .chart {
+    padding: 8px 0 0;
+  }
+  .standout {
+    padding: 14px 16px;
+  }
+  .estimator-guide {
+    padding: 20px 16px;
+  }
+}
+@media print {
+  .cover {
+    color: var(--texto);
+    background: #fff;
+  }
+  .cover p, .cover .eyebrow, .cover .section-number {
+    color: var(--texto);
   }
 }
