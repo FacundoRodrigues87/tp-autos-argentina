@@ -16,170 +16,175 @@ from sklearn.compose import ColumnTransformer
 
 from presentacion import exportar
 from src.autos import (
-    CAT, FEATURES, GROUP, NUM, RESULTS, YEAR,
+    CATEGORICAS, PREDICTORAS, COLUMNAS_GRUPO, NUMERICAS, RESULTADOS, ANIO_CORTE,
     VecinosRegresor, cargar, estimar, ejemplos, ficha, limpiar, seleccionar, separar,
 )
 
 
-class RevisionProgramaTests(unittest.TestCase):
+class PruebasRevisionPrograma(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.raw = cargar()
-        cls.data, cls.audit = limpiar(cls.raw)
-        cls.parts = separar(cls.data)
+        cls.original = cargar()
+        cls.avisos, cls.auditoria = limpiar(cls.original)
+        cls.particiones = separar(cls.avisos)
 
     def test_integridad_y_limpieza(self):
-        self.assertEqual(self.raw.shape, (10191, 25))
-        self.assertEqual(len(self.data), 4044)
-        self.assertTrue(self.data["id"].is_unique)
-        self.assertTrue(self.data["condition"].eq("Usado").all())
-        self.assertTrue(self.data["currency"].eq("USD").all())
-        self.assertTrue(self.data["price"].gt(0).all())
-        self.assertTrue(self.data["km"].ge(0).all())
-        self.assertTrue(self.data["car_year"].between(1886, YEAR).all())
-        exclusions = self.audit.loc[self.audit["accion"].eq("exclusión") & self.audit["cantidad"].gt(0)]
-        self.assertEqual(exclusions["ids"].tolist(), ["MLA1404982421", "MLA1639157994", "MLA1403304889"])
+        self.assertEqual(self.original.shape, (10191, 25))
+        self.assertEqual(len(self.avisos), 4044)
+        self.assertTrue(self.avisos["id"].is_unique)
+        self.assertTrue(self.avisos["condition"].eq("Usado").all())
+        self.assertTrue(self.avisos["currency"].eq("USD").all())
+        self.assertTrue(self.avisos["price"].gt(0).all())
+        self.assertTrue(self.avisos["km"].ge(0).all())
+        self.assertTrue(self.avisos["car_year"].between(1886, ANIO_CORTE).all())
+        exclusiones = self.auditoria.loc[self.auditoria["accion"].eq("exclusión") & self.auditoria["cantidad"].gt(0)]
+        self.assertEqual(exclusiones["ids"].tolist(), ["MLA1404982421", "MLA1639157994", "MLA1403304889"])
 
-    def test_grupos_disjuntos_y_cobertura_de_los_folds(self):
-        train, test = self.parts.train, self.parts.test
-        self.assertEqual((len(train), len(test)), (3213, 831))
-        self.assertTrue(set(train["id"]).isdisjoint(test["id"]))
-        self.assertEqual(set(train["id"]) | set(test["id"]), set(self.data["id"]))
+    def test_grupos_disjuntos_y_cobertura_de_las_rondas(self):
+        entrenamiento, prueba = self.particiones.entrenamiento, self.particiones.prueba
+        self.assertEqual((len(entrenamiento), len(prueba)), (3213, 831))
+        self.assertTrue(set(entrenamiento["id"]).isdisjoint(prueba["id"]))
+        self.assertEqual(set(entrenamiento["id"]) | set(prueba["id"]), set(self.avisos["id"]))
 
-        def keys(frame):
-            return [tuple(str(value).casefold() for value in row)
-                    for row in frame[GROUP].fillna("").itertuples(index=False, name=None)]
+        def claves(tabla):
+            return [tuple(str(valor).casefold() for valor in fila)
+                    for fila in tabla[COLUMNAS_GRUPO].fillna("").itertuples(index=False, name=None)]
 
-        train_keys = keys(train)
-        self.assertTrue(set(train_keys).isdisjoint(keys(test)))
-        validated = []
-        for fit, val in self.parts.folds:
-            self.assertTrue({train_keys[i] for i in fit}.isdisjoint(train_keys[i] for i in val))
-            validated.extend(val)
-        self.assertEqual(sorted(validated), list(range(len(train))))
+        claves_entrenamiento = claves(entrenamiento)
+        self.assertTrue(set(claves_entrenamiento).isdisjoint(claves(prueba)))
+        validadas = []
+        for ajuste, validacion in self.particiones.rondas:
+            self.assertTrue({claves_entrenamiento[posicion] for posicion in ajuste}.isdisjoint(claves_entrenamiento[posicion] for posicion in validacion))
+            validadas.extend(validacion)
+        self.assertEqual(sorted(validadas), list(range(len(entrenamiento))))
 
-    def test_seleccion_ajusta_transformaciones_dentro_de_train(self):
-        # Dos folds bastan para probar el armado de la tabla sin asumir cinco.
-        # El objeto deliberadamente carece de una partición de prueba.
-        train_only = SimpleNamespace(train=self.parts.train, folds=self.parts.folds[:2])
-        original_fit = ColumnTransformer.fit_transform
-        fit_rows = Counter()
+    def test_seleccion_ajusta_transformaciones_dentro_del_entrenamiento(self):
+        # Usamos dos rondas para comprobar que la tabla se adapte
+        # La seleccion solo necesita el entrenamiento
+        solo_entrenamiento = SimpleNamespace(entrenamiento=self.particiones.entrenamiento, rondas=self.particiones.rondas[:2])
+        ajustar_original = ColumnTransformer.fit_transform
+        ajustes = Counter()
 
-        def record_fit(transformer, X, y=None, **params):
-            result = original_fit(transformer, X, y, **params)
-            fit_rows[tuple(X.index)] += 1
-            num = transformer.named_transformers_["num"].named_steps
-            medians = X[NUM].median()
-            imputed = X[NUM].fillna(medians)
-            np.testing.assert_allclose(num["imputar"].statistics_, medians)
-            np.testing.assert_allclose(num["escalar"].mean_, imputed.mean())
-            np.testing.assert_allclose(num["escalar"].scale_, imputed.std(ddof=0))
+        def registrar_ajuste(transformador, predictores, precios=None, **parametros):
+            resultado = ajustar_original(transformador, predictores, precios, **parametros)
+            ajustes[tuple(predictores.index)] += 1
+            numeros = transformador.named_transformers_["num"].named_steps
+            medianas = predictores[NUMERICAS].median()
+            imputados = predictores[NUMERICAS].fillna(medianas)
+            np.testing.assert_allclose(numeros["imputar"].statistics_, medianas)
+            np.testing.assert_allclose(numeros["escalar"].mean_, imputados.mean())
+            np.testing.assert_allclose(numeros["escalar"].scale_, imputados.std(ddof=0))
 
-            cat = transformer.named_transformers_["cat"].named_steps
-            np.testing.assert_array_equal(cat["imputar"].statistics_, X[CAT].mode().iloc[0])
-            for field, learned in zip(CAT, cat["onehot"].categories_):
-                self.assertEqual(learned.tolist(), sorted(X[field].dropna().unique()))
-            return result
+            categorias = transformador.named_transformers_["cat"].named_steps
+            np.testing.assert_array_equal(categorias["imputar"].statistics_, predictores[CATEGORICAS].mode().iloc[0])
+            for campo, aprendidas in zip(CATEGORICAS, categorias["onehot"].categories_):
+                self.assertEqual(aprendidas.tolist(), sorted(predictores[campo].dropna().unique()))
+            return resultado
 
-        with patch.object(ColumnTransformer, "fit_transform", record_fit):
-            winner, searches, cv = seleccionar(train_only)
+        with patch.object(ColumnTransformer, "fit_transform", registrar_ajuste):
+            ganador, busquedas, validacion = seleccionar(solo_entrenamiento)
 
-        fold_columns = [name for name in cv if name.startswith("MAE_fold_")]
-        self.assertEqual(fold_columns, ["MAE_fold_1", "MAE_fold_2"])
-        self.assertEqual(winner, cv.iloc[0]["modelo"])
-        np.testing.assert_allclose(cv["MAE_CV"], cv[fold_columns].mean(axis=1))
-        expected_fits = Counter({tuple(fit): len(cv) for fit, _ in train_only.folds})
-        expected_fits[tuple(train_only.train.index)] = len(searches)
-        self.assertEqual(fit_rows, expected_fits)
+        columnas_rondas = [nombre for nombre in validacion if nombre.startswith("MAE_fold_")]
+        self.assertEqual(columnas_rondas, ["MAE_fold_1", "MAE_fold_2"])
+        self.assertEqual(ganador, validacion.iloc[0]["modelo"])
+        np.testing.assert_allclose(validacion["MAE_CV"], validacion[columnas_rondas].mean(axis=1))
+        ajustes_esperados = Counter({tuple(ajuste): len(validacion) for ajuste, _ in solo_entrenamiento.rondas})
+        ajustes_esperados[tuple(solo_entrenamiento.entrenamiento.index)] = len(busquedas)
+        self.assertEqual(ajustes, ajustes_esperados)
 
     def test_ids_de_particiones_coinciden_con_la_corrida_guardada(self):
-        recorded = json.loads((RESULTS / "particiones.json").read_text(encoding="utf-8"))
-        self.assertEqual(self.parts.train.id.tolist(), recorded["ids_train"])
-        self.assertEqual(self.parts.test.id.tolist(), recorded["ids_test"])
-        for (fit, val), saved in zip(self.parts.folds, recorded["folds"], strict=True):
-            self.assertEqual(self.parts.train.iloc[fit].id.tolist(), saved["ids_ajuste"])
-            self.assertEqual(self.parts.train.iloc[val].id.tolist(), saved["ids_validacion"])
+        registradas = json.loads((RESULTADOS / "particiones.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.particiones.entrenamiento.id.tolist(), registradas["ids_train"])
+        self.assertEqual(self.particiones.prueba.id.tolist(), registradas["ids_test"])
+        for (ajuste, validacion), guardado in zip(self.particiones.rondas, registradas["folds"], strict=True):
+            self.assertEqual(self.particiones.entrenamiento.iloc[ajuste].id.tolist(), guardado["ids_ajuste"])
+            self.assertEqual(self.particiones.entrenamiento.iloc[validacion].id.tolist(), guardado["ids_validacion"])
 
     def test_demo_comparte_ids_y_no_depende_del_orden_de_filas(self):
-        original = ejemplos(self.parts.train)
-        shuffled = ejemplos(self.parts.train.sample(frac=1, random_state=7))
-        self.assertEqual([x["id"] for x in original], [x["id"] for x in shuffled])
-        for first, second in zip(original, shuffled, strict=True):
-            pd.testing.assert_series_equal(pd.Series(first["vehiculo"]), pd.Series(second["vehiculo"]))
-        self.assertEqual(exportar.demo_examples(self.parts.train), original)
+        original = ejemplos(self.particiones.entrenamiento)
+        mezclado = ejemplos(self.particiones.entrenamiento.sample(frac=1, random_state=7))
+        self.assertEqual([fila["id"] for fila in original], [fila["id"] for fila in mezclado])
+        for primero, segundo in zip(original, mezclado, strict=True):
+            pd.testing.assert_series_equal(pd.Series(primero["vehiculo"]), pd.Series(segundo["vehiculo"]))
 
     def test_vecinos_respetan_empates_y_coincidencias_exactas(self):
-        tied = VecinosRegresor(2).fit([[1.0], [-1.0], [1.0]], [100, 200, 400])
-        indices, distances, weights = tied.neighbors([[0.0]])
+        empatados = VecinosRegresor(2).fit([[1.0], [-1.0], [1.0]], [100, 200, 400])
+        indices, distancias, pesos = empatados.vecinos([[0.0]])
         np.testing.assert_array_equal(indices, [[0, 1]])
-        np.testing.assert_allclose(distances, [[1.0, 1.0]])
-        np.testing.assert_allclose(weights, [[0.5, 0.5]])
-        np.testing.assert_allclose(tied.predict([[0.0]]), [150.0])
+        np.testing.assert_allclose(distancias, [[1.0, 1.0]])
+        np.testing.assert_allclose(pesos, [[0.5, 0.5]])
+        np.testing.assert_allclose(empatados.predict([[0.0]]), [150.0])
 
-        exact = VecinosRegresor(3, "distance").fit([[0.0], [0.0], [1.0]], [100, 300, 900])
-        np.testing.assert_allclose(exact.neighbors([[0.0]])[2], [[0.5, 0.5, 0.0]])
-        np.testing.assert_allclose(exact.predict([[0.0]]), [200.0])
+        exactos = VecinosRegresor(3, "distance").fit([[0.0], [0.0], [1.0]], [100, 300, 900])
+        np.testing.assert_allclose(exactos.vecinos([[0.0]])[2], [[0.5, 0.5, 0.0]])
+        np.testing.assert_allclose(exactos.predict([[0.0]]), [200.0])
 
 
 @unittest.skipUnless(shutil.which("node"), "Node.js permite verificar el estimador del HTML")
-class PresentacionTests(unittest.TestCase):
+class PruebasPresentacion(unittest.TestCase):
     def test_exportacion_y_calculo_javascript(self):
-        model_path = RESULTS / "modelo.joblib"
-        self.assertTrue(model_path.is_file(), "Ejecutá primero el notebook")
-        saved = joblib.load(model_path)
-        cases = pd.read_csv(RESULTS / "catalogo_evaluacion.csv")
-        script = (exportar.HERE / "modelo.js").read_text(encoding="utf-8")
+        archivo_modelo = RESULTADOS / "modelo.joblib"
+        self.assertTrue(archivo_modelo.is_file(), "Ejecutá primero el notebook")
+        guardado = joblib.load(archivo_modelo)
+        casos = pd.read_csv(RESULTADOS / "catalogo_evaluacion.csv")
+        codigo = (exportar.CARPETA_PRESENTACION / "modelo.js").read_text(encoding="utf-8")
 
-        with TemporaryDirectory(prefix="tp-autos-export-") as directory:
-            root = Path(directory)
-            (root / "presentacion").mkdir()
-            with patch.object(exportar, "ROOT", root):
+        with TemporaryDirectory(prefix="tp-autos-export-") as directorio:
+            raiz = Path(directorio)
+            (raiz / "presentacion").mkdir()
+            with patch.object(exportar, "RAIZ", raiz):
                 exportar.main([])
-            html = (root / "presentacion/presentacion.html").read_text(encoding="utf-8")
+            pagina = (raiz / "presentacion/presentacion.html").read_text(encoding="utf-8")
 
-        self.assertIn(script, html)
-        match = re.search(r'<script[^>]+id="data"[^>]*>(.*?)</script>', html, re.DOTALL)
-        self.assertIsNotNone(match)
-        payload = json.loads(match.group(1))
-        options = saved["opciones"]
-        forms = [sample["vehiculo"] for sample in saved["ejemplos"]]
-        forms.append({"brand": "Volkswagen", "model": "Up!", "car_year": 2014, "km": 108000,
+        self.assertIn(codigo, pagina)
+        coincidencia = re.search(r'<script[^>]+id="data"[^>]*>(.*?)</script>', pagina, re.DOTALL)
+        self.assertIsNotNone(coincidencia)
+        datos_presentacion = json.loads(coincidencia.group(1))
+        self.assertEqual(datos_presentacion["examples"], guardado["ejemplos"])
+        opciones_validas = guardado["opciones"]
+        fichas = [ejemplo["vehiculo"] for ejemplo in guardado["ejemplos"]]
+        fichas.append({"brand": "Volkswagen", "model": "Up!", "car_year": 2014, "km": 108000,
                       "fuel_type": "Nafta", "transmission": "Manual"})
 
-        js = """
-const { data, cases, forms } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
-const knn = data.knn ?? data.model;
-const results = forms.map(fields => {
-    const { vehicle, errors } = validarVehiculo(fields, data.options);
-    if (Object.keys(errors).length) throw new Error(JSON.stringify(errors));
-    return {
-        price: predecir(vehicle, data.model).price,
-        neighbors: predecir(vehicle, knn).neighbors.map(row => row.index),
-    };
-});
-const tie = predecir({ km: 0 }, {
+        codigo_prueba = """
+const entrada = require("node:fs").readFileSync(0, "utf8");
+const {data: datos, cases: casos, forms: fichas} = JSON.parse(entrada);
+const modeloVecinos = datos.knn ?? datos.model;
+const resultados = [];
+for (const ficha of fichas) {
+    const validacion = validarVehiculo(ficha, datos.options);
+    if (Object.keys(validacion.errors).length) {
+        throw new Error(JSON.stringify(validacion.errors));
+    }
+    const vehiculo = validacion.vehicle;
+    const precio = predecir(vehiculo, datos.model).price;
+    const vecinos = predecir(vehiculo, modeloVecinos).neighbors;
+    resultados.push({price: precio, neighbors: vecinos.map(fila => fila.index)});
+}
+const empate = predecir({km: 0}, {
     kind: "knn", k: 2, weights: "distance", numeric: ["km"], categorical: [],
     median: [0], mean: [0], scale: [1], vectors: [[[1], []], [[-1], []], [[1], []]],
     prices: [100, 200, 400],
 });
-const rejected = validarVehiculo({ ...forms[0], km: -1 }, data.options).errors;
+const rechazados = validarVehiculo({...fichas[0], km: -1}, datos.options).errors;
 console.log(JSON.stringify({
-    results, rejected,
-    tie: [tie.price, tie.neighbors.map(row => row.index)],
-    predictions: cases.map(fields => predecir(fields, data.model).price),
+    results: resultados,
+    rejected: rechazados,
+    tie: [empate.price, empate.neighbors.map(fila => fila.index)],
+    predictions: casos.map(ficha => predecir(ficha, datos.model).price),
 }));
 """
-        args = {"data": payload, "cases": exportar.records(cases[FEATURES]), "forms": forms}
-        result = subprocess.run(["node", "-e", script + js], input=json.dumps(args), text=True,
+        argumentos = {"data": datos_presentacion, "cases": exportar.registros(casos[PREDICTORAS]), "forms": fichas}
+        resultado = subprocess.run(["node", "-e", codigo + codigo_prueba], input=json.dumps(argumentos), text=True,
                                 encoding="utf-8", capture_output=True, timeout=60)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        js_result = json.loads(result.stdout)
-        np.testing.assert_allclose(js_result["predictions"], cases["precio_estimado"], rtol=0, atol=1e-8)
-        self.assertEqual(js_result["tie"], [150, [0, 1]])
-        self.assertIn("km", js_result["rejected"])
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        resultado_js = json.loads(resultado.stdout)
+        np.testing.assert_allclose(resultado_js["predictions"], casos["precio_estimado"], rtol=0, atol=1e-8)
+        self.assertEqual(resultado_js["tie"], [150, [0, 1]])
+        self.assertIn("km", resultado_js["rejected"])
 
-        knn = saved["comparacion_knn"].named_steps
-        for form, actual in zip(forms, js_result["results"], strict=True):
-            self.assertAlmostEqual(actual["price"], estimar(saved["modelo"], options, form), delta=1e-8)
-            vector = knn["preparar"].transform(ficha(form, options))
-            self.assertEqual(actual["neighbors"], knn["modelo"].neighbors(vector)[0][0].tolist())
+        vecinos = guardado["comparacion_knn"].named_steps
+        for formulario, obtenido in zip(fichas, resultado_js["results"], strict=True):
+            self.assertAlmostEqual(obtenido["price"], estimar(guardado["modelo"], opciones_validas, formulario), delta=1e-8)
+            vector = vecinos["preparar"].transform(ficha(formulario, opciones_validas))
+            self.assertEqual(obtenido["neighbors"], vecinos["modelo"].vecinos(vector)[0][0].tolist())

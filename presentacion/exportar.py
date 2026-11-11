@@ -1,4 +1,4 @@
-"""Armá el HTML autónomo con los resultados del notebook."""
+"""Arma la presentacion con los resultados del notebook"""
 
 import argparse
 import base64
@@ -11,109 +11,177 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.autos import CAT, FEATURES, META, NUM, REQUIRED, RESULTS, ROOT, VecinosRegresor, cargar, limpiar, preprocesador, ejemplos
+from src.autos import (
+    ARCHIVO_FUENTE, CATEGORICAS, NUMERICAS, RAIZ, RESULTADOS,
+    VecinosRegresor, cargar, ejemplos, limpiar, preprocesador,
+)
 
-HERE = Path(__file__).resolve().parent
+CARPETA_PRESENTACION = Path(__file__).resolve().parent
 
 
-def records(frame):
-    return json.loads(frame.to_json(orient="records", double_precision=15))
+def registros(tabla):
+    texto = tabla.to_json(orient="records", double_precision=15)
+    return json.loads(texto)
 
 
-def export_model(pipeline):
-    prep = pipeline.named_steps["preparar"].named_transformers_
-    scaler = prep["num"].named_steps["escalar"]
-    state = {
-        "numeric": NUM, "categorical": CAT,
-        "median": prep["num"].named_steps["imputar"].statistics_.tolist(),
-        "mean": scaler.mean_.tolist(), "scale": scaler.scale_.tolist(),
-        "mode": prep["cat"].named_steps["imputar"].statistics_.tolist(),
-        "categories": [column.tolist() for column in prep["cat"].named_steps["onehot"].categories_],
+def exportar_modelo(preparacion_y_modelo):
+    preparacion = preparacion_y_modelo.named_steps["preparar"].named_transformers_
+    pasos_numericos = preparacion["num"].named_steps
+    pasos_categoricos = preparacion["cat"].named_steps
+    escalador = pasos_numericos["escalar"]
+
+    categorias = []
+    for columna in pasos_categoricos["onehot"].categories_:
+        categorias.append(columna.tolist())
+
+    estado = {
+        "numeric": NUMERICAS,
+        "categorical": CATEGORICAS,
+        "median": pasos_numericos["imputar"].statistics_.tolist(),
+        "mean": escalador.mean_.tolist(),
+        "scale": escalador.scale_.tolist(),
+        "mode": pasos_categoricos["imputar"].statistics_.tolist(),
+        "categories": categorias,
     }
-    model = pipeline.named_steps["modelo"]
-    if isinstance(model, VecinosRegresor):
-        # Keep the full-precision numeric prefix and encode the one-hot suffix as active indices.
-        # The JS implementation expands this to the original dimension order for distances.
-        vectors = [[row[:len(NUM)].tolist(), np.flatnonzero(row[len(NUM):]).tolist()]
-                   for row in model.vectors_]
-        return {**state, "kind": "knn", "k": model.n_neighbors, "weights": model.weights,
-                "vectors": vectors, "prices": model.prices_.tolist()}
-    if hasattr(model, "coef_"):
-        return {**state, "kind": "linear", "coef": model.coef_.tolist(), "intercept": model.intercept_}
-    return {**state, "kind": "median", "value": float(model.constant_.item())}
+    modelo = preparacion_y_modelo.named_steps["modelo"]
+    if isinstance(modelo, VecinosRegresor):
+        vectores = []
+        cantidad_numeros = len(NUMERICAS)
+        for fila in modelo.vectors_:
+            # Guardamos los numeros completos y las posiciones de los unos
+            numeros = fila[:cantidad_numeros].tolist()
+            columnas_activas = np.flatnonzero(fila[cantidad_numeros:]).tolist()
+            vectores.append([numeros, columnas_activas])
+        estado["kind"] = "knn"
+        estado["k"] = modelo.n_neighbors
+        estado["weights"] = modelo.weights
+        estado["vectors"] = vectores
+        estado["prices"] = modelo.prices_.tolist()
+    elif hasattr(modelo, "coef_"):
+        estado["kind"] = "linear"
+        estado["coef"] = modelo.coef_.tolist()
+        estado["intercept"] = modelo.intercept_
+    else:
+        estado["kind"] = "median"
+        estado["value"] = float(modelo.constant_.item())
+    return estado
 
 
-def demo_examples(train):
-    """Fichas originales por ID: no varían por empates al ordenar kilometrajes."""
-    return ejemplos(train)
+def datos_presentacion(archivo_modelo=None):
+    if archivo_modelo is None:
+        archivo_modelo = RESULTADOS / "modelo.joblib"
+    guardado = joblib.load(archivo_modelo)
+    original = cargar()
+    avisos, _ = limpiar(original)
 
+    casos = pd.read_csv(RESULTADOS / "catalogo_evaluacion.csv")
+    error_mediano = casos["error_abs"].median()
+    distancia_a_la_mediana = (casos["error_abs"] - error_mediano).abs()
+    caso_tipico = casos.loc[[distancia_a_la_mediana.idxmin()]]
+    casos_mayores = casos.nlargest(2, "error_abs")
+    destacados = pd.concat([caso_tipico, casos_mayores])
 
-def payload(model_path=None):
-    raw = cargar()
-    data, _ = limpiar(raw)
-    saved = joblib.load(model_path or RESULTS / "modelo.joblib")
-    cases = pd.read_csv(RESULTS / "catalogo_evaluacion.csv")
-    typical = (cases["error_abs"] - cases["error_abs"].median()).abs().idxmin()
-    highlighted = pd.concat([cases.loc[[typical]], cases.nlargest(2, "error_abs")])
-    metrics = pd.read_csv(RESULTS / "metricas.csv")
-    cv = pd.read_csv(RESULTS / "validacion_cruzada.csv")
-    histogram, edges = np.histogram(data.price, bins=np.arange(0, 85001, 5000))
-    relations = {}
-    for field in ("car_year", "km", "power_hp"):
-        paired = data[[field, "price"]].dropna()
-        relations[field] = {"points": paired.to_numpy().tolist(),
-                            "r": paired[field].corr(paired.price)}
-    partition = json.loads((RESULTS / "particiones.json").read_text(encoding="utf-8"))
-    audit = pd.read_csv(RESULTS / "calidad.csv")
-    examples = raw.drop_duplicates("id").set_index("id").loc[
-        ["MLA1404982421", "MLA1639157994", "MLA1403304889"], ["title", "model", "car_year", "doors", "price"]
-    ]
-    winner = export_model(saved["modelo"])
-    implementation = VecinosRegresor.predict if winner["kind"] == "knn" else preprocesador
-    eda = {key: "data:image/png;base64," + base64.b64encode((RESULTS / filename).read_bytes()).decode("ascii")
-           for key, filename in {"univariate": "01_univariado.png", "correlation": "03_correlacion.png",
-                                 "brands": "04_marcas.png"}.items()}
-    brands = data.groupby("brand").agg(n=("price", "size"), mediana=("price", "median"))
+    metricas = pd.read_csv(RESULTADOS / "metricas.csv")
+    validacion = pd.read_csv(RESULTADOS / "validacion_cruzada.csv")
+    segmentos = pd.read_csv(RESULTADOS / "errores_segmentos.csv")
+    auditoria = pd.read_csv(RESULTADOS / "calidad.csv")
+    seleccion = auditoria.loc[auditoria["accion"].eq("selección"), "cantidad"]
+    particiones = json.loads((RESULTADOS / "particiones.json").read_text(encoding="utf-8"))
+
+    cantidades, bordes = np.histogram(avisos["price"], bins=np.arange(0, 85001, 5000))
+    precios = {
+        "max": avisos["price"].max(),
+        "mean": avisos["price"].mean(),
+        "median": avisos["price"].median(),
+        "q1": avisos["price"].quantile(0.25),
+        "q3": avisos["price"].quantile(0.75),
+        "histogram": cantidades.tolist(),
+        "edges": bordes.tolist(),
+    }
+    relaciones = {}
+    for columna in ["car_year", "km", "power_hp"]:
+        pares = avisos[[columna, "price"]].dropna()
+        relaciones[columna] = {
+            "points": pares.to_numpy().tolist(),
+            "r": pares[columna].corr(pares["price"]),
+        }
+
+    ids_auditados = ["MLA1404982421", "MLA1639157994", "MLA1403304889"]
+    por_id = original.drop_duplicates("id").set_index("id")
+    avisos_auditados = por_id.loc[ids_auditados, ["title", "model", "car_year", "doors", "price"]]
+    imagenes = {}
+    archivos_imagenes = {
+        "univariate": "01_univariado.png",
+        "correlation": "03_correlacion.png",
+        "brands": "04_marcas.png",
+    }
+    for nombre, archivo in archivos_imagenes.items():
+        contenido = (RESULTADOS / archivo).read_bytes()
+        texto = base64.b64encode(contenido).decode("ascii")
+        imagenes[nombre] = "data:image/png;base64," + texto
+
+    marcas = avisos.groupby("brand").agg(n=("price", "size"), mediana=("price", "median"))
+    marcas = marcas.sort_values("mediana").reset_index()
+    ganador = exportar_modelo(guardado["modelo"])
+    comparacion_vecinos = None
+    funcion_mostrada = VecinosRegresor.predict
+    if ganador["kind"] != "knn":
+        comparacion_vecinos = exportar_modelo(guardado["comparacion_knn"])
+        funcion_mostrada = preprocesador
+    codigo = textwrap.dedent(inspect.getsource(funcion_mostrada)).strip()
+    columnas_destacadas = ["id", "brand", "model", "car_year", "price", "precio_estimado", "error"]
     return {
-        "implementation": {"file": "src/autos.py", "function": implementation.__qualname__,
-                           "code": textwrap.dedent(inspect.getsource(implementation)).strip()},
-        "edaImages": eda, "brandSummary": records(brands.sort_values("mediana").reset_index()),
-        "source": json.loads(META.read_text(encoding="utf-8")),
-        "raw": {"rows": len(raw), "cols": len(raw.columns)},
-        "selected": int(audit.loc[audit.accion.eq("selección"), "cantidad"].iloc[0]),
-        "clean": len(data), "brands": data.brand.nunique(), "models": data.model.nunique(),
-        "audit": records(audit),
-        "auditExamples": records(examples.reset_index()),
-        "price": {"max": data.price.max(), "mean": data.price.mean(),
-                  "median": data.price.median(), "q1": data.price.quantile(.25),
-                  "q3": data.price.quantile(.75), "histogram": histogram.tolist(), "edges": edges.tolist()},
-        "relations": relations,
-        "partition": partition, "metrics": records(metrics), "cv": records(cv),
-        "errors": records(pd.read_csv(RESULTS / "errores_segmentos.csv")),
-        "cases": records(highlighted[["id", "brand", "model", "car_year", "price", "precio_estimado", "error"]]),
-        "testPoints": cases[["price", "precio_estimado"]].to_numpy().tolist(),
-        "options": saved["opciones"], "examples": demo_examples(saved["train"]),
-        "model": winner, "knn": None if winner["kind"] == "knn" else export_model(saved["comparacion_knn"]),
-        "neighbors": records(saved["train"][["brand", "model", "car_year", "km"]]),
+        "implementation": {
+            "file": "src/autos.py",
+            "function": funcion_mostrada.__qualname__,
+            "code": codigo,
+        },
+        "edaImages": imagenes,
+        "brandSummary": registros(marcas),
+        "source": json.loads(ARCHIVO_FUENTE.read_text(encoding="utf-8")),
+        "raw": {"rows": len(original), "cols": len(original.columns)},
+        "selected": int(seleccion.iloc[0]),
+        "clean": len(avisos),
+        "brands": avisos["brand"].nunique(),
+        "models": avisos["model"].nunique(),
+        "audit": registros(auditoria),
+        "auditExamples": registros(avisos_auditados.reset_index()),
+        "price": precios,
+        "relations": relaciones,
+        "partition": particiones,
+        "metrics": registros(metricas),
+        "cv": registros(validacion),
+        "errors": registros(segmentos),
+        "cases": registros(destacados[columnas_destacadas]),
+        "testPoints": casos[["price", "precio_estimado"]].to_numpy().tolist(),
+        "options": guardado["opciones"],
+        "examples": ejemplos(guardado["train"]),
+        "model": ganador,
+        "knn": comparacion_vecinos,
+        "neighbors": registros(guardado["train"][["brand", "model", "car_year", "km"]]),
     }
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--modelo", type=Path, help="Modelo joblib local; por defecto resultados/modelo.joblib")
-    args = parser.parse_args(argv)
-    data = json.dumps(payload(args.modelo), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
-    template = (HERE / "layout.html.in").read_text(encoding="utf-8")
-    for token, content in {
-        "/* ESTILOS */": (HERE / "estilos.css").read_text(encoding="utf-8"),
-        "/* DATOS */": data.replace("<", r"\u003c"),
-        "/* MODELO */": (HERE / "modelo.js").read_text(encoding="utf-8"),
-        "/* INTERACCIONES */": (HERE / "app.js").read_text(encoding="utf-8"),
-    }.items():
-        template = template.replace(token, content)
-    output = ROOT / "presentacion/presentacion.html"
-    output.write_text(template, encoding="utf-8")
-    print(f"{output.name} · {output.stat().st_size:,} bytes")
+def main(argumentos=None):
+    opciones = argparse.ArgumentParser(description=__doc__)
+    opciones.add_argument("--modelo", type=Path, help="Ruta del modelo joblib")
+    entrada = opciones.parse_args(argumentos)
+    datos = datos_presentacion(entrada.modelo)
+    texto_datos = json.dumps(datos, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    # Evitamos que un texto del CSV pueda cerrar la etiqueta de datos
+    texto_datos = texto_datos.replace("<", r"\u003c")
+    pagina = (CARPETA_PRESENTACION / "layout.html.in").read_text(encoding="utf-8")
+    estilos = (CARPETA_PRESENTACION / "estilos.css").read_text(encoding="utf-8")
+    modelo = (CARPETA_PRESENTACION / "modelo.js").read_text(encoding="utf-8")
+    interacciones = (CARPETA_PRESENTACION / "app.js").read_text(encoding="utf-8")
+
+    pagina = pagina.replace("/* ESTILOS */", estilos)
+    pagina = pagina.replace("/* MODELO */", modelo)
+    pagina = pagina.replace("/* INTERACCIONES */", interacciones)
+    pagina = pagina.replace("/* DATOS */", texto_datos)
+    salida = RAIZ / "presentacion/presentacion.html"
+    salida.write_text(pagina, encoding="utf-8")
+    print(f"{salida.name} · {salida.stat().st_size:,} bytes")
 
 
 if __name__ == "__main__":

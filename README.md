@@ -10,7 +10,7 @@ El CSV de origen contiene 10.191 avisos y 25 columnas. El recorte de usados en U
 
 ## Reproducir en Windows
 
-Desde la carpeta del proyecto, con Python 3.12 (integración comprobada con 3.12.14):
+Desde la carpeta del proyecto, con Python 3.12. El notebook y el estimador se comprobaron en Windows con Python 3.12.13.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -22,6 +22,10 @@ py -3.12 -m venv .venv
 ```
 
 En macOS o Linux, creá el entorno con `python3.12 -m venv .venv` y usá `.venv/bin/python` en los demás comandos. El notebook escribe las tablas, los gráficos y el modelo local en `resultados/`. Podés consultar los campos opcionales del estimador con `estimar.py --help`.
+
+## Cómo leer el código
+
+El notebook muestra el análisis en orden. `src/autos.py` tiene la limpieza y el modelo, `estimar.py` permite cargar una ficha desde la terminal y `presentacion/modelo.js` repite el cálculo para el navegador.
 
 ## Archivos de resultados
 

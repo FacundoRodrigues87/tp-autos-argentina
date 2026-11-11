@@ -1,502 +1,1124 @@
-const data = JSON.parse(document.getElementById("data").textContent);
-const options = data.options;
-const byId = id => document.getElementById(id);
-const integer = new Intl.NumberFormat("es-AR", {maximumFractionDigits: 0});
-const decimal = new Intl.NumberFormat("es-AR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const r2 = new Intl.NumberFormat("es-AR", {minimumFractionDigits: 4, maximumFractionDigits: 4});
-const num = value => integer.format(value);
-const dec = value => decimal.format(value);
-const usd = value => "USD " + num(value);
-const preciseUSD = value => "USD " + dec(value);
-const signed = value => (value >= 0 ? "+" : "−") + usd(Math.abs(value));
-const safe = value => String(value).replace(/[&<>"']/g, char => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-})[char]);
-const percent = value => dec(value * 100) + " %";
-const weightLabel = weight => ({distance: "por distancia", uniform: "uniforme"})[weight];
+const textoDatos = document.getElementById("data").textContent;
+const datos = JSON.parse(textoDatos);
+const opciones = datos.options;
 
-function selectOptions(element, entries) {
-  element.replaceChildren(...entries.map(([value, label]) => new Option(label, value)));
+function buscarElemento(identificador) {
+  return document.getElementById(identificador);
 }
 
-function table(labels, rows) {
-  const heading = labels.map(label => '<th scope="col">' + safe(label) + "</th>").join("");
-  const body = rows.map(row => "<tr>" + row.map(value => "<td>" + safe(value) + "</td>").join("") + "</tr>").join("");
-  return '<div class="table-wrap" tabindex="0" role="region" aria-label="Tabla: ' + safe(labels.join(', ')) + '. Desplazamiento horizontal disponible."' + '><table><thead><tr>' + heading + "</tr></thead><tbody>" + body + "</tbody></table></div>";
+const formatoEntero = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+const formatoDecimal = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const formatoR2 = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 4,
+});
+
+function formatearEntero(valor) {
+  return formatoEntero.format(valor);
 }
 
-function stats(entries) {
-  return entries.map(([value, label]) => "<div><dt>" + safe(value) + "</dt><dd>" + safe(label) + "</dd></div>").join("");
+function formatearDecimal(valor) {
+  return formatoDecimal.format(valor);
 }
 
-const examples = data.auditExamples;
-const auditCount = prefix => data.audit.find(row => row.motivo.startsWith(prefix)).cantidad;
-byId("funnel").innerHTML = stats([
-  [num(data.raw.rows), "avisos originales · " + data.raw.cols + " columnas"],
-  [num(data.selected), "usados publicados en USD"],
-  [num(data.clean), "avisos después de la limpieza"],
-]);
-byId("audit-summary").innerHTML = [
-  "<p><strong>ID repetido.</strong> " + safe(examples[0].id) + " figura como Ford Ka en el modelo y Focus III en el título. Conservamos la primera aparición.</p>",
-  "<p><strong>Año imposible.</strong> Un Chevrolet Corsa figura con año " + safe(examples[1].car_year) + ". Quitamos el aviso.</p>",
-  "<p><strong>Anticipo.</strong> Excluimos el Fiat Uno cuyo título identifica " + usd(examples[2].price) + " como anticipo. Conservamos los otros " +
-    num(auditCount("Títulos que ofrecen")) + " avisos que ofrecen financiación.</p>",
-].join("");
-byId("audit-table").innerHTML = table(["Acción", "Regla", "Cantidad"],
-  data.audit.map(row => [row.accion, row.motivo, num(row.cantidad)])) +
-  table(["ID de publicación", "Título original"], examples.map(row => [row.id, row.title]));
-
-function showTransform() {
-  const stages = {
-    engine: [["Texto original", "1.6 110CV"], ["Cilindrada", "1,6 L"], ["Dato numérico", "1,6"]],
-    km: [["Texto original", "119000 km"], ["Unidad", "km"], ["Dato numérico", "119.000"]],
-    doors: [["Texto original", num(examples[1].doors)], ["Control", "Fuera de 2 a 6"], ["Resultado", "Faltante"]],
-  }[byId("transform-choice").value];
-  byId("transform-demo").innerHTML = stages.map(([label, value], i) =>
-    '<div class="animate" style="animation-delay:' + i * 65 + 'ms"><span class="note">' +
-    safe(label) + "</span><b>" + safe(value) + "</b></div>").join("");
+function dolares(valor) {
+  return "USD " + formatearEntero(valor);
 }
-byId("transform-choice").addEventListener("change", showTransform);
-showTransform();
 
-const price = data.price;
-byId("price-copy").textContent = "La mitad central va de " + usd(price.q1) + " a " + usd(price.q3) +
-  ". Los precios altos alargan la cola y elevan la media.";
-byId("price-stats").innerHTML = stats([
-  [usd(price.median), "Mediana"], [usd(price.mean), "Media"], [usd(price.max), "Máximo observado"],
-]);
+function dolaresConCentavos(valor) {
+  return "USD " + formatearDecimal(valor);
+}
 
-const tickNumber = new Intl.NumberFormat("es-AR", {maximumFractionDigits: 1});
-const compactTick = value => {
-  if (Math.abs(value) >= 1000000) return tickNumber.format(value / 1000000) + " M";
-  return Math.abs(value) >= 1000 ? tickNumber.format(value / 1000) + " mil" : num(value);
-};
-const series = (lo, hi, count) => Array.from({length: count}, (_, i) => lo + (hi - lo) * i / (count - 1));
-
-function graph(element, config) {
-  const width = element.clientWidth;
-  const height = width < 440 ? 304 : 330;
-  const left = 57;
-  const right = width - 30;
-  const top = 22;
-  const bottom = height - 54;
-  const [xmin, xmax] = config.x;
-  const [ymin, ymax] = config.y;
-  const x = value => left + (value - xmin) * (right - left) / (xmax - xmin);
-  const y = value => bottom - (value - ymin) * (bottom - top) / (ymax - ymin);
-  const point = (cx, cy, r, className) => '<circle class="' + className + '" cx="' + x(cx).toFixed(2) +
-    '" cy="' + y(cy).toFixed(2) + '" r="' + r + '"/>';
-  const line = (x1, y1, x2, y2, className) => '<line class="' + className + '" x1="' + x1 + '" y1="' + y1 +
-    '" x2="' + x2 + '" y2="' + y2 + '"/>';
-  const label = (value, tx, ty, align, className = "tick") => '<text class="' + className + '" x="' + tx +
-    '" y="' + ty + '" text-anchor="' + align + '">' + safe(value) + "</text>";
-  const allTicks = config.xt ?? series(xmin, xmax, 5);
-  const xt = width < 360 && allTicks.length > 4
-    ? [allTicks[0], allTicks[Math.floor(allTicks.length / 2)], allTicks.at(-1)] : allTicks;
-  const yt = config.yt ?? series(ymin, ymax, 5);
-  const gx = xt.map(value => label((config.formatX ?? compactTick)(value), x(value), bottom + 19, "middle")).join("");
-  const gy = yt.map(value => line(left, y(value), right, y(value), "gridline") +
-    label(compactTick(value), left - 8, y(value) + 4, "end")).join("");
-  let marks = "";
-  if (config.bins) {
-    marks = config.bins.map(([lo, hi, count]) =>
-      '<rect class="hist-bar" x="' + (x(lo) + 1) + '" y="' + y(count) + '" width="' + (x(hi) - x(lo) - 2) +
-      '" height="' + (bottom - y(count)) + '"><title>' + usd(lo) + " a " + usd(hi) + " · " + num(count) +
-      " avisos</title></rect>").join("");
+function dolaresConSigno(valor) {
+  let signo = "+";
+  if (valor < 0) {
+    signo = "−";
   }
-  if (config.points) {
-    if (config.diagonal) marks += line(x(0), y(0), x(xmax), y(ymax), "axis reference");
-    marks += config.points.map(([px, py]) => point(px, py, width < 440 ? 1.6 : 2, "data-point")).join("");
-    if (config.highlight) {
-      marks += line(x(config.highlight.price), y(config.highlight.price),
-        x(config.highlight.price), y(config.highlight.precio_estimado), "axis");
-      marks += point(config.highlight.price, config.highlight.precio_estimado, 5, "highlight animate");
+  return signo + dolares(Math.abs(valor));
+}
+
+function escaparTexto(valor) {
+  // Escapamos el texto que se incluye en una etiqueta de HTML
+  let texto = String(valor);
+  texto = texto.replaceAll("&", "&amp;");
+  texto = texto.replaceAll("<", "&lt;");
+  texto = texto.replaceAll(">", "&gt;");
+  texto = texto.replaceAll('"', "&quot;");
+  texto = texto.replaceAll("'", "&#39;");
+  return texto;
+}
+
+function porcentaje(valor) {
+  return formatearDecimal(valor * 100) + " %";
+}
+
+function nombreDelPeso(peso) {
+  if (peso === "distance") {
+    return "por distancia";
+  }
+  if (peso === "uniform") {
+    return "uniforme";
+  }
+}
+
+function cargarOpciones(elemento, entradas) {
+  elemento.replaceChildren();
+  for (const [valor, etiqueta] of entradas) {
+    elemento.append(new Option(etiqueta, valor));
+  }
+}
+
+function armarTabla(etiquetas, filas) {
+  const descripcion = escaparTexto(etiquetas.join(", "));
+  let tabla = '<div class="table-wrap" tabindex="0" role="region" aria-label="Tabla: ';
+  tabla += descripcion + '. Desplazamiento horizontal disponible.">';
+  tabla += "<table><thead><tr>";
+  for (const etiqueta of etiquetas) {
+    tabla += '<th scope="col">' + escaparTexto(etiqueta) + "</th>";
+  }
+  tabla += "</tr></thead><tbody>";
+  for (const fila of filas) {
+    tabla += "<tr>";
+    for (const valor of fila) {
+      tabla += "<td>" + escaparTexto(valor) + "</td>";
+    }
+    tabla += "</tr>";
+  }
+  tabla += "</tbody></table></div>";
+  return tabla;
+}
+
+function armarResumen(entradas) {
+  let resumen = "";
+  for (const [valor, etiqueta] of entradas) {
+    resumen += "<div><dt>" + escaparTexto(valor) + "</dt>";
+    resumen += "<dd>" + escaparTexto(etiqueta) + "</dd></div>";
+  }
+  return resumen;
+}
+
+const avisosAuditados = datos.auditExamples;
+const contarRegla = (inicio) => datos.audit.find((fila) => fila.motivo.startsWith(inicio)).cantidad;
+buscarElemento("funnel").innerHTML = armarResumen([
+  [formatearEntero(datos.raw.rows), "avisos originales · " + datos.raw.cols + " columnas"],
+  [formatearEntero(datos.selected), "usados publicados en USD"],
+  [formatearEntero(datos.clean), "avisos después de la limpieza"],
+]);
+buscarElemento("audit-summary").innerHTML = [
+  "<p><strong>ID repetido.</strong> " +
+    escaparTexto(avisosAuditados[0].id) +
+    " figura como Ford Ka en el modelo y Focus III en el título. Conservamos la primera aparición.</p>",
+  "<p><strong>Año imposible.</strong> Un Chevrolet Corsa figura con año " +
+    escaparTexto(avisosAuditados[1].car_year) +
+    ". Quitamos el aviso.</p>",
+  "<p><strong>Anticipo.</strong> Excluimos el Fiat Uno cuyo título identifica " +
+    dolares(avisosAuditados[2].price) +
+    " como anticipo. Conservamos los otros " +
+    formatearEntero(contarRegla("Títulos que ofrecen")) +
+    " avisos que ofrecen financiación.</p>",
+].join("");
+buscarElemento("audit-table").innerHTML =
+  armarTabla(
+    ["Acción", "Regla", "Cantidad"],
+    datos.audit.map((fila) => [fila.accion, fila.motivo, formatearEntero(fila.cantidad)]),
+  ) +
+  armarTabla(
+    ["ID de publicación", "Título original"],
+    avisosAuditados.map((fila) => [fila.id, fila.title]),
+  );
+function mostrarTransformacion() {
+  const pasos = {
+    engine: [
+      ["Texto original", "1.6 110CV"],
+      ["Cilindrada", "1,6 L"],
+      ["Dato numérico", "1,6"],
+    ],
+    km: [
+      ["Texto original", "119000 km"],
+      ["Unidad", "km"],
+      ["Dato numérico", "119.000"],
+    ],
+    doors: [
+      ["Texto original", formatearEntero(avisosAuditados[1].doors)],
+      ["Control", "Fuera de 2 a 6"],
+      ["Resultado", "Faltante"],
+    ],
+  }[buscarElemento("transform-choice").value];
+  buscarElemento("transform-demo").innerHTML = pasos
+    .map(
+      ([etiqueta, valor], posicion) =>
+        '<div class="animate" style="animation-delay:' +
+        posicion * 65 +
+        'ms"><span class="note">' +
+        escaparTexto(etiqueta) +
+        "</span><b>" +
+        escaparTexto(valor) +
+        "</b></div>",
+    )
+    .join("");
+}
+buscarElemento("transform-choice").addEventListener("change", mostrarTransformacion);
+mostrarTransformacion();
+const precios = datos.price;
+buscarElemento("price-copy").textContent =
+  "La mitad central va de " +
+  dolares(precios.q1) +
+  " a " +
+  dolares(precios.q3) +
+  ". Los precios altos alargan la cola y elevan la media.";
+buscarElemento("price-stats").innerHTML = armarResumen([
+  [dolares(precios.median), "Mediana"],
+  [dolares(precios.mean), "Media"],
+  [dolares(precios.max), "Máximo observado"],
+]);
+const formatoEscala = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
+
+function abreviarEscala(valor) {
+  if (Math.abs(valor) >= 1000000) {
+    return formatoEscala.format(valor / 1000000) + " M";
+  }
+  if (Math.abs(valor) >= 1000) {
+    return formatoEscala.format(valor / 1000) + " mil";
+  }
+  return formatearEntero(valor);
+}
+
+function marcasDeEscala(inicio, fin, cantidad) {
+  const marcas = [];
+  for (let posicion = 0; posicion < cantidad; posicion++) {
+    const valor = inicio + ((fin - inicio) * posicion) / (cantidad - 1);
+    marcas.push(valor);
+  }
+  return marcas;
+}
+
+function dibujarGrafico(elemento, configuracion) {
+  const ancho = elemento.clientWidth;
+  const alto = ancho < 440 ? 304 : 330;
+  const izquierda = 57;
+  const derecha = ancho - 30;
+  const arriba = 22;
+  const abajo = alto - 54;
+  const [minimoX, maximoX] = configuracion.limitesX;
+  const [minimoY, maximoY] = configuracion.limitesY;
+
+  // Convertimos las unidades del dato a posiciones del dibujo
+  function ubicarX(valor) {
+    const proporcion = (valor - minimoX) / (maximoX - minimoX);
+    return izquierda + proporcion * (derecha - izquierda);
+  }
+
+  function ubicarY(valor) {
+    const proporcion = (valor - minimoY) / (maximoY - minimoY);
+    return abajo - proporcion * (abajo - arriba);
+  }
+
+  function dibujarPunto(datoX, datoY, radio, clase) {
+    const centroX = ubicarX(datoX).toFixed(2);
+    const centroY = ubicarY(datoY).toFixed(2);
+    return (
+      '<circle class="' + clase + '" cx="' + centroX + '" cy="' + centroY + '" r="' + radio + '"/>'
+    );
+  }
+
+  function dibujarLinea(inicioX, inicioY, finX, finY, clase) {
+    return (
+      '<line class="' +
+      clase +
+      '" x1="' +
+      inicioX +
+      '" y1="' +
+      inicioY +
+      '" x2="' +
+      finX +
+      '" y2="' +
+      finY +
+      '"/>'
+    );
+  }
+
+  function dibujarEtiqueta(valor, posicionX, posicionY, alineacion, clase = "tick") {
+    return (
+      '<text class="' +
+      clase +
+      '" x="' +
+      posicionX +
+      '" y="' +
+      posicionY +
+      '" text-anchor="' +
+      alineacion +
+      '">' +
+      escaparTexto(valor) +
+      "</text>"
+    );
+  }
+
+  let marcasX = configuracion.marcasX ?? marcasDeEscala(minimoX, maximoX, 5);
+  if (ancho < 360 && marcasX.length > 4) {
+    const posicionCentral = Math.floor(marcasX.length / 2);
+    marcasX = [marcasX[0], marcasX[posicionCentral], marcasX.at(-1)];
+  }
+
+  const marcasY = configuracion.marcasY ?? marcasDeEscala(minimoY, maximoY, 5);
+  const formatearMarcaX = configuracion.formatearX ?? abreviarEscala;
+  let escalaX = "";
+  for (const valor of marcasX) {
+    escalaX += dibujarEtiqueta(formatearMarcaX(valor), ubicarX(valor), abajo + 19, "middle");
+  }
+  let escalaY = "";
+  for (const valor of marcasY) {
+    const posicion = ubicarY(valor);
+    escalaY += dibujarLinea(izquierda, posicion, derecha, posicion, "gridline");
+    escalaY += dibujarEtiqueta(abreviarEscala(valor), izquierda - 8, posicion + 4, "end");
+  }
+
+  let figuras = "";
+  if (configuracion.barras) {
+    for (const [inicio, fin, cantidad] of configuracion.barras) {
+      const posicionX = ubicarX(inicio) + 1;
+      const posicionY = ubicarY(cantidad);
+      const anchoBarra = ubicarX(fin) - ubicarX(inicio) - 2;
+      const altoBarra = abajo - posicionY;
+      const titulo =
+        dolares(inicio) + " a " + dolares(fin) + " · " + formatearEntero(cantidad) + " avisos";
+      figuras +=
+        '<rect class="hist-bar" x="' +
+        posicionX +
+        '" y="' +
+        posicionY +
+        '" width="' +
+        anchoBarra +
+        '" height="' +
+        altoBarra +
+        '"><title>' +
+        titulo +
+        "</title></rect>";
     }
   }
-  element.innerHTML = '<svg viewBox="0 0 ' + width + " " + height + '" role="img" aria-label="' + safe(config.name) +
-    '">' + gy + marks + line(left, bottom, right, bottom, "axis") + gx +
-    label(config.xTitle, (left + right) / 2, height - 8, "middle", "axis-title") +
-    label(config.yTitle, left, 13, "start", "axis-title") + "</svg>";
+
+  if (configuracion.puntos) {
+    if (configuracion.diagonal) {
+      figuras += dibujarLinea(
+        ubicarX(0),
+        ubicarY(0),
+        ubicarX(maximoX),
+        ubicarY(maximoY),
+        "axis reference",
+      );
+    }
+    const radio = ancho < 440 ? 1.6 : 2;
+    for (const [datoX, datoY] of configuracion.puntos) {
+      figuras += dibujarPunto(datoX, datoY, radio, "data-point");
+    }
+    if (configuracion.destacado) {
+      const publicado = configuracion.destacado.price;
+      const estimado = configuracion.destacado.precio_estimado;
+      const posicionX = ubicarX(publicado);
+      figuras += dibujarLinea(posicionX, ubicarY(publicado), posicionX, ubicarY(estimado), "axis");
+      figuras += dibujarPunto(publicado, estimado, 5, "highlight animate");
+    }
+  }
+
+  let dibujo =
+    '<svg viewBox="0 0 ' +
+    ancho +
+    " " +
+    alto +
+    '" role="img" aria-label="' +
+    escaparTexto(configuracion.nombre) +
+    '">';
+  dibujo += escalaY + figuras;
+  dibujo += dibujarLinea(izquierda, abajo, derecha, abajo, "axis") + escalaX;
+  dibujo += dibujarEtiqueta(
+    configuracion.tituloX,
+    (izquierda + derecha) / 2,
+    alto - 8,
+    "middle",
+    "axis-title",
+  );
+  dibujo += dibujarEtiqueta(configuracion.tituloY, izquierda, 13, "start", "axis-title");
+  elemento.innerHTML = dibujo + "</svg>";
 }
 
-const histogram = price.histogram.map((count, i) => [price.edges[i], price.edges[i + 1], count]);
-function showHistogram() {
-  const top = Math.ceil(Math.max(...price.histogram) / 500) * 500;
-  graph(byId("histogram"), {x: [0, price.edges.at(-1)], y: [0, top], bins: histogram,
-    name: "Histograma de precios en USD", xTitle: "Precio publicado (USD)", yTitle: "Avisos",
-    xt: [0, 20000, 40000, 60000, 80000], yt: series(0, top, 5)});
+const barrasHistograma = [];
+for (let posicion = 0; posicion < precios.histogram.length; posicion++) {
+  const inicio = precios.edges[posicion];
+  const fin = precios.edges[posicion + 1];
+  const cantidad = precios.histogram[posicion];
+  barrasHistograma.push([inicio, fin, cantidad]);
 }
 
-function showRelation() {
-  const field = byId("relation-choice").value;
-  const {points, r} = data.relations[field];
-  const settings = {
-    car_year: {x: [1989, 2025], xt: [1990, 2000, 2010, 2024], formatX: String, xTitle: "Año de fabricación"},
-    km: {x: [0, 1020000], xt: [0, 250000, 500000, 750000, 1000000], xTitle: "Kilometraje (km)"},
-    power_hp: {x: [0, 280], xt: [0, 70, 140, 210, 280], xTitle: "Potencia (hp)"},
-  }[field];
-  const chart = byId("relation-chart");
-  if (field === "km" && chart.clientWidth < 430) settings.xt = [0, 250000, 500000, 1000000];
-  graph(chart, {...settings, y: [0, 85000], yt: [0, 20000, 40000, 60000, 80000], points,
-    name: "Dispersión de precio según " + settings.xTitle.toLowerCase(), yTitle: "Precio publicado (USD)"});
-  byId("relation-copy").textContent = "r de Pearson = " + dec(r) + " · " + num(points.length) + " avisos.";
+function mostrarHistograma() {
+  const arriba = Math.ceil(Math.max(...precios.histogram) / 500) * 500;
+  dibujarGrafico(buscarElemento("histogram"), {
+    limitesX: [0, precios.edges.at(-1)],
+    limitesY: [0, arriba],
+    barras: barrasHistograma,
+    nombre: "Histograma de precios en USD",
+    tituloX: "Precio publicado (USD)",
+    tituloY: "Avisos",
+    marcasX: [0, 20000, 40000, 60000, 80000],
+    marcasY: marcasDeEscala(0, arriba, 5),
+  });
 }
-byId("relation-choice").addEventListener("change", showRelation);
-
-const partition = data.partition;
-const chosen = data.metrics.find(row => row.elegido_por_CV);
-const baseline = data.metrics.find(row => row.modelo === "Baseline mediana");
-const knn = data.knn ?? data.model;
-byId("selection-copy").textContent = chosen.modelo + (data.model.kind === "knn"
-  ? " con " + num(knn.k) + " vecinos y peso " + weightLabel(knn.weights) : "") +
-  " obtuvo el menor MAE de validación, " + preciseUSD(chosen.MAE_CV) + ".";
-byId("cv-table").innerHTML = table(["Modelo", "Vecinos", "Pesos", "MAE de validación"],
-  data.cv.map(row => [row.modelo, row.vecinos ?? "·", weightLabel(row.pesos) ?? "·", preciseUSD(row.MAE_CV)]));
-byId("partition-copy").textContent = num(partition.grupos_train) + " grupos de entrenamiento y " +
-  num(partition.grupos_test) + " de prueba. Grupos compartidos: " + num(partition.grupos_compartidos) +
-  ". Semilla " + partition.semilla + ".";
-
-function partitionBar(counts, labels) {
-  return '<div class="partition-track animate" aria-hidden="true">' +
-    counts.map(count => '<span style="flex:' + count + '"></span>').join("") + '</div><div class="partition-legend">' +
-    counts.map((count, i) => "<span><b>" + num(count) + "</b> " + safe(labels[i]) + "</span>").join("") + "</div>";
+function mostrarRelacion() {
+  const campo = buscarElemento("relation-choice").value;
+  const { points: puntos, r: correlacion } = datos.relations[campo];
+  const ajustes = {
+    car_year: {
+      limitesX: [1989, 2025],
+      marcasX: [1990, 2000, 2010, 2024],
+      formatearX: String,
+      tituloX: "Año de fabricación",
+    },
+    km: {
+      limitesX: [0, 1020000],
+      marcasX: [0, 250000, 500000, 750000, 1000000],
+      tituloX: "Kilometraje (km)",
+    },
+    power_hp: {
+      limitesX: [0, 280],
+      marcasX: [0, 70, 140, 210, 280],
+      tituloX: "Potencia (hp)",
+    },
+  }[campo];
+  const grafico = buscarElemento("relation-chart");
+  if (campo === "km" && grafico.clientWidth < 430) ajustes.marcasX = [0, 250000, 500000, 1000000];
+  dibujarGrafico(grafico, {
+    ...ajustes,
+    limitesY: [0, 85000],
+    marcasY: [0, 20000, 40000, 60000, 80000],
+    puntos,
+    nombre: "Dispersión de precio según " + ajustes.tituloX.toLowerCase(),
+    tituloY: "Precio publicado (USD)",
+  });
+  buscarElemento("relation-copy").textContent =
+    "r de Pearson = " +
+    formatearDecimal(correlacion) +
+    " · " +
+    formatearEntero(puntos.length) +
+    " avisos.";
 }
-byId("holdout").innerHTML = partitionBar([partition.train, partition.test], ["entrenamiento", "prueba"]);
-selectOptions(byId("fold-choice"), partition.folds.map(row => [row.fold, "Fold " + row.fold + " de " + partition.folds.length]));
-function showFold() {
-  const selected = Number(byId("fold-choice").value);
-  const fold = partition.folds[selected - 1];
-  const blocks = partition.folds.map(row => '<span class="' + (row.fold === selected ? "current animate" : "") +
-    '" style="flex:' + row.validacion + '">' + row.fold + "</span>").join("");
-  byId("fold-demo").innerHTML = '<div class="fold-track" aria-hidden="true">' + blocks +
-    '</div><div class="partition-legend"><span><b>' + num(fold.ajuste) + '</b> ajuste</span><span><b>' +
-    num(fold.validacion) + '</b> validación (bloque ' + selected + ')</span></div>' +
-    '<p class="note">' + fold.grupos_compartidos + " grupos compartidos en este fold.</p>";
+buscarElemento("relation-choice").addEventListener("change", mostrarRelacion);
+const particion = datos.partition;
+const ganador = datos.metrics.find((fila) => fila.elegido_por_CV);
+const referencia = datos.metrics.find((fila) => fila.modelo === "Baseline mediana");
+const modeloVecinos = datos.knn ?? datos.model;
+buscarElemento("selection-copy").textContent =
+  ganador.modelo +
+  (datos.model.kind === "knn"
+    ? " con " +
+      formatearEntero(modeloVecinos.k) +
+      " vecinos y peso " +
+      nombreDelPeso(modeloVecinos.weights)
+    : "") +
+  " obtuvo el menor MAE de validación, " +
+  dolaresConCentavos(ganador.MAE_CV) +
+  ".";
+buscarElemento("cv-table").innerHTML = armarTabla(
+  ["Modelo", "Vecinos", "Pesos", "MAE de validación"],
+  datos.cv.map((fila) => [
+    fila.modelo,
+    fila.vecinos ?? "·",
+    nombreDelPeso(fila.pesos) ?? "·",
+    dolaresConCentavos(fila.MAE_CV),
+  ]),
+);
+buscarElemento("partition-copy").textContent =
+  formatearEntero(particion.grupos_train) +
+  " grupos de entrenamiento y " +
+  formatearEntero(particion.grupos_test) +
+  " de prueba. Grupos compartidos: " +
+  formatearEntero(particion.grupos_compartidos) +
+  ". Semilla " +
+  particion.semilla +
+  ".";
+function barraParticion(cantidades, etiquetas) {
+  return (
+    '<div class="partition-track animate" aria-hidden="true">' +
+    cantidades.map((cantidad) => '<span style="flex:' + cantidad + '"></span>').join("") +
+    '</div><div class="partition-legend">' +
+    cantidades
+      .map(
+        (cantidad, posicion) =>
+          "<span><b>" +
+          formatearEntero(cantidad) +
+          "</b> " +
+          escaparTexto(etiquetas[posicion]) +
+          "</span>",
+      )
+      .join("") +
+    "</div>"
+  );
 }
-byId("fold-choice").addEventListener("change", showFold);
-showFold();
-
-const vehicleName = row => row.brand + " " + row.model + " " + row.car_year;
-const neighborHeaders = ["Vehículo", "Distancia", "Peso", "Precio (USD)", "Aporte (USD)"];
-function neighborValues(row) {
-  const car = data.neighbors[row.index];
-  return [vehicleName(car) + " · " + num(car.km) + " km", dec(row.distance), percent(row.weight),
-    num(row.price), num(row.contribution)];
+buscarElemento("holdout").innerHTML = barraParticion(
+  [particion.train, particion.test],
+  ["entrenamiento", "prueba"],
+);
+cargarOpciones(
+  buscarElemento("fold-choice"),
+  particion.folds.map((fila) => [fila.fold, "Fold " + fila.fold + " de " + particion.folds.length]),
+);
+function mostrarRonda() {
+  const rondaElegida = Number(buscarElemento("fold-choice").value);
+  const ronda = particion.folds[rondaElegida - 1];
+  const bloques = particion.folds
+    .map(
+      (fila) =>
+        '<span class="' +
+        (fila.fold === rondaElegida ? "current animate" : "") +
+        '" style="flex:' +
+        fila.validacion +
+        '">' +
+        fila.fold +
+        "</span>",
+    )
+    .join("");
+  buscarElemento("fold-demo").innerHTML =
+    '<div class="fold-track" aria-hidden="true">' +
+    bloques +
+    '</div><div class="partition-legend"><span><b>' +
+    formatearEntero(ronda.ajuste) +
+    "</b> ajuste</span><span><b>" +
+    formatearEntero(ronda.validacion) +
+    "</b> validación (bloque " +
+    rondaElegida +
+    ")</span></div>" +
+    '<p class="note">' +
+    ronda.grupos_compartidos +
+    " grupos compartidos en este fold.</p>";
 }
-const demoVehicle = (data.examples.find(({vehiculo}) => formOptionalMissing(vehiculo).length) ?? data.examples[0]).vehiculo;
-const demo = predecir(demoVehicle, knn);
-byId("neighbor-intro").textContent = vehicleName(demoVehicle) + " · " + num(demoVehicle.km) +
+buscarElemento("fold-choice").addEventListener("change", mostrarRonda);
+mostrarRonda();
+const nombreVehiculo = (fila) => fila.brand + " " + fila.model + " " + fila.car_year;
+const columnasVecinos = ["Vehículo", "Distancia", "Peso", "Precio (USD)", "Aporte (USD)"];
+function filaVecino(fila) {
+  const auto = datos.neighbors[fila.index];
+  return [
+    nombreVehiculo(auto) + " · " + formatearEntero(auto.km) + " km",
+    formatearDecimal(fila.distance),
+    porcentaje(fila.weight),
+    formatearEntero(fila.price),
+    formatearEntero(fila.contribution),
+  ];
+}
+const vehiculoEjemplo = (
+  datos.examples.find(({ vehiculo }) => opcionalesVacios(vehiculo).length) ?? datos.examples[0]
+).vehiculo;
+const ejemploVecinos = predecir(vehiculoEjemplo, modeloVecinos);
+buscarElemento("neighbor-intro").textContent =
+  nombreVehiculo(vehiculoEjemplo) +
+  " · " +
+  formatearEntero(vehiculoEjemplo.km) +
   " km. Usamos una ficha de entrenamiento con especificaciones opcionales faltantes para ver la búsqueda." +
-  (data.model.kind === "knn" ? "" : " Esta animación corresponde al modelo de comparación.");
-byId("neighbor-weight-rule").textContent = knn.weights === "distance"
-  ? "El peso parte de 1 ÷ distancia y se normaliza para que los pesos sumen 100 %. Si hay coincidencias exactas, solo ellas reciben peso."
-  : "Con pesos uniformes, todos los vecinos aportan la misma proporción de su precio.";
-let visibleNeighbors = 0;
-function showNeighbors() {
-  const shown = demo.neighbors.slice(0, visibleNeighbors);
-  byId("neighbor-demo").innerHTML = table(neighborHeaders, shown.map(neighborValues));
-  byId("neighbor-demo").querySelector("tbody tr:last-child")?.classList.add("animate");
-  const subtotal = shown.reduce((sum, row) => sum + row.contribution, 0);
-  byId("neighbor-status").textContent = visibleNeighbors === knn.k
-    ? "Estimación de k-NN: " + usd(demo.price)
-    : visibleNeighbors + " de " + knn.k + " vecinos visibles" + (visibleNeighbors ? " · aporte acumulado " + usd(subtotal) : ".");
-  byId("reveal-neighbor").disabled = visibleNeighbors === knn.k;
-  byId("reset-neighbors").disabled = visibleNeighbors === 0;
+  (datos.model.kind === "knn" ? "" : " Esta animación corresponde al modelo de comparación.");
+buscarElemento("neighbor-weight-rule").textContent =
+  modeloVecinos.weights === "distance"
+    ? "El peso parte de 1 ÷ distancia y se normaliza para que los pesos sumen 100 %. Si hay coincidencias exactas, solo ellas reciben peso."
+    : "Con pesos uniformes, todos los vecinos aportan la misma proporción de su precio.";
+let vecinosVisibles = 0;
+function mostrarVecinos() {
+  const vecinosMostrados = ejemploVecinos.neighbors.slice(0, vecinosVisibles);
+  buscarElemento("neighbor-demo").innerHTML = armarTabla(
+    columnasVecinos,
+    vecinosMostrados.map(filaVecino),
+  );
+  buscarElemento("neighbor-demo").querySelector("tbody tr:last-child")?.classList.add("animate");
+  const aporteAcumulado = vecinosMostrados.reduce((suma, fila) => suma + fila.contribution, 0);
+  buscarElemento("neighbor-status").textContent =
+    vecinosVisibles === modeloVecinos.k
+      ? "Estimación de k-NN: " + dolares(ejemploVecinos.price)
+      : vecinosVisibles +
+        " de " +
+        modeloVecinos.k +
+        " vecinos visibles" +
+        (vecinosVisibles ? " · aporte acumulado " + dolares(aporteAcumulado) : ".");
+  buscarElemento("reveal-neighbor").disabled = vecinosVisibles === modeloVecinos.k;
+  buscarElemento("reset-neighbors").disabled = vecinosVisibles === 0;
 }
-byId("reveal-neighbor").addEventListener("click", () => { visibleNeighbors++; showNeighbors(); });
-byId("reset-neighbors").addEventListener("click", () => { visibleNeighbors = 0; showNeighbors(); });
-showNeighbors();
-
-function showMetric() {
-  const field = byId("metric-choice").value;
-  const explain = {
+buscarElemento("reveal-neighbor").addEventListener("click", () => {
+  vecinosVisibles++;
+  mostrarVecinos();
+});
+buscarElemento("reset-neighbors").addEventListener("click", () => {
+  vecinosVisibles = 0;
+  mostrarVecinos();
+});
+mostrarVecinos();
+function mostrarMetrica() {
+  const campo = buscarElemento("metric-choice").value;
+  const explicaciones = {
     MAE_test: "El MAE mide cuánto se desvía, en promedio, la estimación del precio publicado.",
     RMSE_test: "El RMSE da más peso a las diferencias grandes y se expresa en USD.",
-    R2_test: "R² compara el error cuadrático con el de usar la media observada de prueba: 1 sería ajuste perfecto, 0 equivale a esa referencia y puede ser negativo. No es un porcentaje de aciertos.",
+    R2_test:
+      "R² compara el error cuadrático con el de usar la media observada de prueba: 1 sería ajuste perfecto, 0 equivale a esa referencia y puede ser negativo. No es un porcentaje de aciertos.",
   };
-  byId("metric-copy").textContent = explain[field];
-  const values = data.metrics.map(row => row[field]);
-  const low = Math.min(0, ...values);
-  const high = Math.max(0, ...values);
-  const position = value => (value - low) / (high - low) * 100;
-  const zero = position(0);
-  byId("metric-chart").innerHTML = data.metrics.map(row => {
-    const bar = position(row[field]);
-    const label = field === "R2_test" ? r2.format(row[field]) : usd(row[field]);
-    return '<div class="bar-row animate"><div class="bar-label"><span>' + safe(row.modelo) +
-      (row.elegido_por_CV ? " · elegido" : "") + '</span><span class="number">' + label +
-      '</span></div><div class="bar-track" aria-hidden="true"><i class="' + (row.elegido_por_CV ? "" : "secondary-bar") +
-      '" style="left:' + Math.min(bar, zero) + "%;width:" + Math.abs(bar - zero) + '%"></i><span class="zero" style="left:' +
-      zero + '%"></span></div></div>';
-  }).join("");
+  buscarElemento("metric-copy").textContent = explicaciones[campo];
+  const valores = datos.metrics.map((fila) => fila[campo]);
+  const minimo = Math.min(0, ...valores);
+  const maximo = Math.max(0, ...valores);
+  const ubicarBarra = (valor) => ((valor - minimo) / (maximo - minimo)) * 100;
+  const posicionCero = ubicarBarra(0);
+  buscarElemento("metric-chart").innerHTML = datos.metrics
+    .map((fila) => {
+      const posicionBarra = ubicarBarra(fila[campo]);
+      const etiqueta = campo === "R2_test" ? formatoR2.format(fila[campo]) : dolares(fila[campo]);
+      return (
+        '<div class="bar-row animate"><div class="bar-label"><span>' +
+        escaparTexto(fila.modelo) +
+        (fila.elegido_por_CV ? " · elegido" : "") +
+        '</span><span class="number">' +
+        etiqueta +
+        '</span></div><div class="bar-track" aria-hidden="true"><i class="' +
+        (fila.elegido_por_CV ? "" : "secondary-bar") +
+        '" style="left:' +
+        Math.min(posicionBarra, posicionCero) +
+        "%;width:" +
+        Math.abs(posicionBarra - posicionCero) +
+        '%"></i><span class="zero" style="left:' +
+        posicionCero +
+        '%"></span></div></div>'
+      );
+    })
+    .join("");
 }
-byId("metric-choice").addEventListener("change", showMetric);
-byId("metric-table").innerHTML = table(["Modelo", "MAE CV", "MAE prueba", "RMSE prueba", "R²"],
-  data.metrics.map(row => [row.modelo, preciseUSD(row.MAE_CV), preciseUSD(row.MAE_test), preciseUSD(row.RMSE_test), r2.format(row.R2_test)]));
-showMetric();
-
-selectOptions(byId("case-choice"), data.cases.map((row, i) => [
-  i, vehicleName(row) + (i === 0 ? " · error típico" : " · error alto"),
-]));
-function showCase() {
-  const row = data.cases[Number(byId("case-choice").value)];
-  byId("case-copy").innerHTML = "<strong>" + safe(row.id) + "</strong><br>Publicado " + usd(row.price) +
-    "<br>Estimado " + usd(row.precio_estimado) + "<br>Diferencia " + signed(row.error);
-  graph(byId("error-chart"), {x: [0, 85000], y: [0, 85000], xt: [0, 20000, 40000, 60000, 80000],
-    yt: [0, 20000, 40000, 60000, 80000], points: data.testPoints, diagonal: true, highlight: row,
-    name: "Precios estimados frente a los publicados, con el aviso elegido resaltado",
-    xTitle: "Precio publicado (USD)", yTitle: "Precio estimado (USD)"});
+buscarElemento("metric-choice").addEventListener("change", mostrarMetrica);
+buscarElemento("metric-table").innerHTML = armarTabla(
+  ["Modelo", "MAE CV", "MAE prueba", "RMSE prueba", "R²"],
+  datos.metrics.map((fila) => [
+    fila.modelo,
+    dolaresConCentavos(fila.MAE_CV),
+    dolaresConCentavos(fila.MAE_test),
+    dolaresConCentavos(fila.RMSE_test),
+    formatoR2.format(fila.R2_test),
+  ]),
+);
+mostrarMetrica();
+cargarOpciones(
+  buscarElemento("case-choice"),
+  datos.cases.map((fila, posicion) => [
+    posicion,
+    nombreVehiculo(fila) + (posicion === 0 ? " · error típico" : " · error alto"),
+  ]),
+);
+function mostrarCaso() {
+  const fila = datos.cases[Number(buscarElemento("case-choice").value)];
+  buscarElemento("case-copy").innerHTML =
+    "<strong>" +
+    escaparTexto(fila.id) +
+    "</strong><br>Publicado " +
+    dolares(fila.price) +
+    "<br>Estimado " +
+    dolares(fila.precio_estimado) +
+    "<br>Diferencia " +
+    dolaresConSigno(fila.error);
+  dibujarGrafico(buscarElemento("error-chart"), {
+    limitesX: [0, 85000],
+    limitesY: [0, 85000],
+    marcasX: [0, 20000, 40000, 60000, 80000],
+    marcasY: [0, 20000, 40000, 60000, 80000],
+    puntos: datos.testPoints,
+    diagonal: true,
+    destacado: fila,
+    nombre: "Precios estimados frente a los publicados, con el aviso elegido resaltado",
+    tituloX: "Precio publicado (USD)",
+    tituloY: "Precio estimado (USD)",
+  });
 }
-byId("case-choice").addEventListener("change", showCase);
-function showSegments() {
-  const field = byId("segment-choice").value;
-  const [low, high] = partition.cortes_precio_USD;
-  const explanations = {
-    nivel_precio: "Terciles de entrenamiento en " + usd(low) + " y " + usd(high) + ".",
+buscarElemento("case-choice").addEventListener("change", mostrarCaso);
+function mostrarSegmentos() {
+  const campo = buscarElemento("segment-choice").value;
+  const [minimo, maximo] = particion.cortes_precio_USD;
+  const explicaciones = {
+    nivel_precio: "Terciles de entrenamiento en " + dolares(minimo) + " y " + dolares(maximo) + ".",
     antiguedad: "Antigüedad medida con referencia a 2024.",
     brand: "Cada fila reúne los avisos de la marca que quedaron en prueba.",
   };
-  byId("segment-copy").textContent = explanations[field] + " El sesgo es la diferencia promedio entre estimado y publicado.";
-  byId("segment-table").innerHTML = table(["Segmento", "Avisos", "MAE", "Sesgo"],
-    data.errors.filter(row => row.variable === field).map(row => [row.segmento, num(row.n), usd(row.MAE), signed(row.sesgo)]));
+  buscarElemento("segment-copy").textContent =
+    explicaciones[campo] + " El sesgo es la diferencia promedio entre estimado y publicado.";
+  buscarElemento("segment-table").innerHTML = armarTabla(
+    ["Segmento", "Avisos", "MAE", "Sesgo"],
+    datos.errors
+      .filter((fila) => fila.variable === campo)
+      .map((fila) => [
+        fila.segmento,
+        formatearEntero(fila.n),
+        dolares(fila.MAE),
+        dolaresConSigno(fila.sesgo),
+      ]),
+  );
 }
-byId("segment-choice").addEventListener("change", showSegments);
-showSegments();
-
-const formFields = ["brand", "model", "car_year", "km", "fuel_type", "transmission",
-  "engine_l", "power_hp", "doors", "passenger_capacity", "traction_control"];
-
-function formOptionalMissing(vehicle) {
-  return Object.keys(options.etiquetas).filter(field => !options.obligatorios.includes(field) && vehicle[field] == null);
-}
-
-function formField(field) {
-  const required = options.obligatorios.includes(field);
-  const attrs = ' id="' + field + '" name="' + field + '" aria-describedby="hint-' + field + ' error-' + field + '"' +
-    (required ? ' required' : '');
-  const range = options.rangos[field];
-  const isInteger = options.enteros.includes(field);
-  const hint = range
-    ? (field === 'car_year' ? String(range[0]) : tickNumber.format(range[0])) + ' a ' + (field === 'car_year' ? String(range[1]) : num(range[1])) +
-      (isInteger ? '. Entero, sin separadores de miles.' : '. Solo el número, sin unidades.')
-    : field === 'model' ? 'Opciones de la marca elegida en entrenamiento.' : required ? '' : 'Sin dato: se completa con la moda de entrenamiento.';
-  const control = range
-    ? '<input type="number" min="' + range[0] + '" max="' + range[1] + '" step="' +
-      (isInteger ? '1' : 'any') + '" inputmode="' + (isInteger ? 'numeric' : 'decimal') + '"' + attrs + '>'
-    : '<select' + attrs + '></select>';
-  return '<div><label for="' + field + '">' + safe(options.etiquetas[field]) + '</label>' + control +
-    '<span class="field-hint" id="hint-' + field + '">' + safe(hint) + '</span>' +
-    '<span class="field-error" id="error-' + field + '"></span></div>';
-}
-byId('required-fields').innerHTML = formFields.filter(field => options.obligatorios.includes(field)).map(formField).join('');
-byId('optional-fields').innerHTML = formFields.filter(field => !options.obligatorios.includes(field)).map(formField).join('');
-byId('form-scope').textContent = 'Catálogo del entrenamiento: años ' + options.rangos.car_year.join('–') +
-  ', hasta ' + num(options.rangos.km[1]) + ' km. Son límites de entrada, no garantía de que cada combinación esté bien representada.';
-function setChoices(field, values, empty) {
-  selectOptions(byId(field), [['', empty], ...values.map(value => [value, value])]);
-}
-let selectedBrand;
-function setModels() {
-  const brand = byId('brand').value;
-  setChoices('model', options.modelos[brand] ?? [], brand ? 'Elegí el modelo' : 'Elegí primero la marca');
-  byId('model').disabled = !brand;
-  selectedBrand = brand;
-}
-setChoices('brand', Object.keys(options.modelos), 'Elegí la marca');
-for (const [field, values] of Object.entries(options.categorias)) {
-  setChoices(field, values, options.obligatorios.includes(field) ? 'Elegí una opción' : 'Sin dato');
-}
-selectOptions(byId('example-choice'), [['', 'Completar una ficha'], ...data.examples.map(({vehiculo}, i) =>
-  [i, vehicleName(vehiculo) + (formOptionalMissing(vehiculo).length ? ' · sin opcionales' : ' · completa')])]);
-setModels();
-
-function fieldError(field, message = '') {
-  byId('error-' + field).textContent = message;
-  if (message) byId(field).setAttribute('aria-invalid', 'true');
-  else byId(field).removeAttribute('aria-invalid');
-}
-let hasEstimate = false;
-let estimateDirty = false;
-function resetEstimate(changed = false) {
-  byId('estimate').textContent = 'USD ·';
-  estimateDirty = changed && (hasEstimate || estimateDirty);
-  byId('estimate-caption').textContent = estimateDirty
-    ? 'La ficha cambió. Pulsá «Estimar precio» para actualizar.' : 'Completá la ficha y pulsá «Estimar precio».';
-  byId('estimate-explanation').hidden = true;
-  byId('estimate-explanation').open = false;
-  byId('explanation').replaceChildren();
-  hasEstimate = false;
-}
-function formValues() {
-  return Object.fromEntries(formFields.map(field => [field, byId(field).value]));
-}
-function fieldErrors() {
-  const result = validarVehiculo(formValues(), options);
-  for (const field of formFields) {
-    if (byId(field).validity.badInput) result.errors[field] = options.etiquetas[field] + ' debe ser un número.';
+buscarElemento("segment-choice").addEventListener("change", mostrarSegmentos);
+mostrarSegmentos();
+const camposFicha = [
+  "brand",
+  "model",
+  "car_year",
+  "km",
+  "fuel_type",
+  "transmission",
+  "engine_l",
+  "power_hp",
+  "doors",
+  "passenger_capacity",
+  "traction_control",
+];
+function opcionalesVacios(vehiculo) {
+  const faltantes = [];
+  for (const campo of Object.keys(opciones.etiquetas)) {
+    if (!opciones.obligatorios.includes(campo) && vehiculo[campo] == null) {
+      faltantes.push(campo);
+    }
   }
-  return result;
+  return faltantes;
 }
-function clearFormStatus() {
-  byId('form-status').textContent = '';
-  formFields.forEach(field => fieldError(field));
-  resetEstimate();
-}
-function vehicleChanged(event) {
-  const field = event.target.id;
-  if (!formFields.includes(field)) return;
-  if (field === 'brand' && byId('brand').value !== selectedBrand) {
-    setModels();
-    fieldError('model');
+
+function armarCampo(campo) {
+  const obligatorio = opciones.obligatorios.includes(campo);
+  let atributos =
+    ' id="' +
+    campo +
+    '" name="' +
+    campo +
+    '" aria-describedby="hint-' +
+    campo +
+    " error-" +
+    campo +
+    '"';
+  if (obligatorio) {
+    atributos += " required";
   }
-  byId('example-choice').value = '';
-  byId('form-status').textContent = '';
-  fieldError(field);
-  resetEstimate(true);
+  const rango = opciones.rangos[campo];
+  let ayuda = "";
+  let control = "<select" + atributos + "></select>";
+
+  if (rango) {
+    let minimo = formatoEscala.format(rango[0]);
+    let maximo = formatearEntero(rango[1]);
+    if (campo === "car_year") {
+      minimo = String(rango[0]);
+      maximo = String(rango[1]);
+    }
+    ayuda = minimo + " a " + maximo;
+    let paso = "any";
+    let teclado = "decimal";
+    if (opciones.enteros.includes(campo)) {
+      paso = "1";
+      teclado = "numeric";
+      ayuda += ". Entero, sin separadores de miles.";
+    } else {
+      ayuda += ". Solo el número, sin unidades.";
+    }
+    control =
+      '<input type="number" min="' +
+      rango[0] +
+      '" max="' +
+      rango[1] +
+      '" step="' +
+      paso +
+      '" inputmode="' +
+      teclado +
+      '"' +
+      atributos +
+      ">";
+  } else if (campo === "model") {
+    ayuda = "Opciones de la marca elegida en entrenamiento.";
+  } else if (!obligatorio) {
+    ayuda = "Sin dato: se completa con la moda de entrenamiento.";
+  }
+
+  const etiqueta = escaparTexto(opciones.etiquetas[campo]);
+  return (
+    '<div><label for="' +
+    campo +
+    '">' +
+    etiqueta +
+    "</label>" +
+    control +
+    '<span class="field-hint" id="hint-' +
+    campo +
+    '">' +
+    escaparTexto(ayuda) +
+    "</span>" +
+    '<span class="field-error" id="error-' +
+    campo +
+    '"></span></div>'
+  );
 }
-// Some controls/browsers emit only change; both paths must invalidate an old estimate.
-byId('vehicle-form').addEventListener('input', vehicleChanged);
-byId('vehicle-form').addEventListener('change', vehicleChanged);
-// Validate on submit so a blur error cannot move the control being clicked.
-byId('example-choice').addEventListener('change', event => {
-  const value = event.target.value;
-  const sample = value === '' ? {} : data.examples[Number(value)].vehiculo;
-  byId('brand').value = sample.brand ?? '';
-  setModels();
-  for (const field of formFields) byId(field).value = sample[field] ?? '';
-  clearFormStatus();
+
+let camposObligatorios = "";
+let camposOpcionales = "";
+for (const campo of camposFicha) {
+  if (opciones.obligatorios.includes(campo)) {
+    camposObligatorios += armarCampo(campo);
+  } else {
+    camposOpcionales += armarCampo(campo);
+  }
+}
+buscarElemento("required-fields").innerHTML = camposObligatorios;
+buscarElemento("optional-fields").innerHTML = camposOpcionales;
+
+buscarElemento("form-scope").textContent =
+  "Catálogo del entrenamiento: años " +
+  opciones.rangos.car_year.join("–") +
+  ", hasta " +
+  formatearEntero(opciones.rangos.km[1]) +
+  " km. Son límites de entrada, no garantía de que cada combinación esté bien representada.";
+function cargarOpcionesCampo(campo, valores, opcionVacia) {
+  cargarOpciones(buscarElemento(campo), [
+    ["", opcionVacia],
+    ...valores.map((valor) => [valor, valor]),
+  ]);
+}
+let marcaElegida;
+function cargarModelos() {
+  const marca = buscarElemento("brand").value;
+  cargarOpcionesCampo(
+    "model",
+    opciones.modelos[marca] ?? [],
+    marca ? "Elegí el modelo" : "Elegí primero la marca",
+  );
+  buscarElemento("model").disabled = !marca;
+  marcaElegida = marca;
+}
+cargarOpcionesCampo("brand", Object.keys(opciones.modelos), "Elegí la marca");
+for (const [campo, valores] of Object.entries(opciones.categorias)) {
+  cargarOpcionesCampo(
+    campo,
+    valores,
+    opciones.obligatorios.includes(campo) ? "Elegí una opción" : "Sin dato",
+  );
+}
+cargarOpciones(buscarElemento("example-choice"), [
+  ["", "Completar una ficha"],
+  ...datos.examples.map(({ vehiculo }, posicion) => [
+    posicion,
+    nombreVehiculo(vehiculo) +
+      (opcionalesVacios(vehiculo).length ? " · sin opcionales" : " · completa"),
+  ]),
+]);
+cargarModelos();
+function mostrarErrorCampo(campo, mensaje = "") {
+  buscarElemento("error-" + campo).textContent = mensaje;
+  const control = buscarElemento(campo);
+  if (mensaje) {
+    control.setAttribute("aria-invalid", "true");
+  } else {
+    control.removeAttribute("aria-invalid");
+  }
+}
+
+let hayEstimacion = false;
+let fichaCambio = false;
+
+function borrarEstimacion(cambio = false) {
+  buscarElemento("estimate").textContent = "USD ·";
+  fichaCambio = cambio && (hayEstimacion || fichaCambio);
+  let mensaje = "Completá la ficha y pulsá «Estimar precio».";
+  if (fichaCambio) {
+    mensaje = "La ficha cambió. Pulsá «Estimar precio» para actualizar.";
+  }
+  buscarElemento("estimate-caption").textContent = mensaje;
+  const detalle = buscarElemento("estimate-explanation");
+  detalle.hidden = true;
+  detalle.open = false;
+  buscarElemento("explanation").replaceChildren();
+  hayEstimacion = false;
+}
+
+function leerFicha() {
+  const valores = {};
+  for (const campo of camposFicha) {
+    valores[campo] = buscarElemento(campo).value;
+  }
+  return valores;
+}
+
+function validarFormulario() {
+  const resultado = validarVehiculo(leerFicha(), opciones);
+  for (const campo of camposFicha) {
+    if (buscarElemento(campo).validity.badInput)
+      resultado.errors[campo] = opciones.etiquetas[campo] + " debe ser un número.";
+  }
+  return resultado;
+}
+function limpiarFormulario() {
+  buscarElemento("form-status").textContent = "";
+  camposFicha.forEach((campo) => mostrarErrorCampo(campo));
+  borrarEstimacion();
+}
+function alCambiarFicha(evento) {
+  const campo = evento.target.id;
+  if (!camposFicha.includes(campo)) return;
+  if (campo === "brand" && buscarElemento("brand").value !== marcaElegida) {
+    cargarModelos();
+    mostrarErrorCampo("model");
+  }
+  buscarElemento("example-choice").value = "";
+  buscarElemento("form-status").textContent = "";
+  mostrarErrorCampo(campo);
+  borrarEstimacion(true);
+}
+// Escuchamos los dos eventos para borrar la estimacion si cambia la ficha
+buscarElemento("vehicle-form").addEventListener("input", alCambiarFicha);
+buscarElemento("vehicle-form").addEventListener("change", alCambiarFicha);
+// Validamos al enviar para que el foco no cambie antes del clic
+buscarElemento("example-choice").addEventListener("change", (evento) => {
+  const valor = evento.target.value;
+  const ejemplo = valor === "" ? {} : datos.examples[Number(valor)].vehiculo;
+  buscarElemento("brand").value = ejemplo.brand ?? "";
+  cargarModelos();
+  for (const campo of camposFicha) buscarElemento(campo).value = ejemplo[campo] ?? "";
+  limpiarFormulario();
 });
-byId('vehicle-form').addEventListener('reset', event => {
-  event.preventDefault();
-  byId('example-choice').value = '';
-  formFields.forEach(field => { byId(field).value = ''; });
-  setModels();
-  clearFormStatus();
-  byId('optional-details').open = false;
-  byId('brand').focus();
+buscarElemento("vehicle-form").addEventListener("reset", (evento) => {
+  evento.preventDefault();
+  buscarElemento("example-choice").value = "";
+  camposFicha.forEach((campo) => {
+    buscarElemento(campo).value = "";
+  });
+  cargarModelos();
+  limpiarFormulario();
+  buscarElemento("optional-details").open = false;
+  buscarElemento("brand").focus();
 });
-byId('vehicle-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const {vehicle, errors} = fieldErrors();
-  formFields.forEach(field => fieldError(field, errors[field]));
-  const first = formFields.find(field => errors[field]);
-  if (first) {
-    resetEstimate();
-    byId('form-status').textContent = 'Revisá los campos marcados para estimar.';
-    if (!options.obligatorios.includes(first)) byId('optional-details').open = true;
-    byId(first).focus();
+buscarElemento("vehicle-form").addEventListener("submit", (evento) => {
+  evento.preventDefault();
+  const { vehicle: vehiculo, errors: errores } = validarFormulario();
+  camposFicha.forEach((campo) => mostrarErrorCampo(campo, errores[campo]));
+  const primerError = camposFicha.find((campo) => errores[campo]);
+  if (primerError) {
+    borrarEstimacion();
+    buscarElemento("form-status").textContent = "Revisá los campos marcados para estimar.";
+    if (!opciones.obligatorios.includes(primerError))
+      buscarElemento("optional-details").open = true;
+    buscarElemento(primerError).focus();
     return;
   }
-  byId('form-status').textContent = '';
-  const result = predecir(vehicle, data.model);
-  byId('estimate').textContent = preciseUSD(result.price);
-  const missing = formOptionalMissing(vehicle);
-  byId('estimate-caption').textContent = vehicleName(vehicle) + ' · ' + num(vehicle.km) + ' km. ' +
-    (missing.length ? 'Opcionales imputados: ' + missing.map(field => options.etiquetas[field].split(' (')[0].toLowerCase()).join(', ') + '.' :
-      'Ficha completa.');
-  hasEstimate = true;
-  estimateDirty = false;
-  byId('estimate-explanation').hidden = false;
-  if (result.neighbors) {
-    byId('explanation').innerHTML = table(neighborHeaders, result.neighbors.map(neighborValues)) +
+  buscarElemento("form-status").textContent = "";
+  const resultado = predecir(vehiculo, datos.model);
+  buscarElemento("estimate").textContent = dolaresConCentavos(resultado.price);
+  const faltantes = opcionalesVacios(vehiculo);
+  buscarElemento("estimate-caption").textContent =
+    nombreVehiculo(vehiculo) +
+    " · " +
+    formatearEntero(vehiculo.km) +
+    " km. " +
+    (faltantes.length
+      ? "Opcionales imputados: " +
+        faltantes
+          .map((campo) => opciones.etiquetas[campo].split(" (")[0].toLowerCase())
+          .join(", ") +
+        "."
+      : "Ficha completa.");
+  hayEstimacion = true;
+  fichaCambio = false;
+  buscarElemento("estimate-explanation").hidden = false;
+  if (resultado.neighbors) {
+    buscarElemento("explanation").innerHTML =
+      armarTabla(columnasVecinos, resultado.neighbors.map(filaVecino)) +
       '<p class="note">La estimación suma los aportes antes de redondear los valores de la tabla.</p>';
-  } else if (result.contributions) {
-    const labels = [...data.model.numeric.map(field => options.etiquetas[field]),
-      ...data.model.categorical.flatMap((field, i) => data.model.categories[i].map(
-        value => options.etiquetas[field] + ' · ' + value))];
-    const rows = result.contributions.map((value, i) => [labels[i], value]).filter(([, value]) => value !== 0);
-    byId('explanation').innerHTML = table(['Término', 'Aporte'], [
-      ['Intercepto', signed(data.model.intercept)], ...rows.map(([name, value]) => [name, signed(value)]),
-    ]);
+  } else if (resultado.contributions) {
+    const etiquetas = [
+      ...datos.model.numeric.map((campo) => opciones.etiquetas[campo]),
+      ...datos.model.categorical.flatMap((campo, posicion) =>
+        datos.model.categories[posicion].map((valor) => opciones.etiquetas[campo] + " · " + valor),
+      ),
+    ];
+    const filas = resultado.contributions
+      .map((valor, posicion) => [etiquetas[posicion], valor])
+      .filter(([, valor]) => valor !== 0);
+    buscarElemento("explanation").innerHTML = armarTabla(
+      ["Término", "Aporte"],
+      [
+        ["Intercepto", dolaresConSigno(datos.model.intercept)],
+        ...filas.map(([nombre, valor]) => [nombre, dolaresConSigno(valor)]),
+      ],
+    );
   } else {
-    byId('explanation').textContent = 'La estimación usa la mediana de los precios de entrenamiento.';
+    buscarElemento("explanation").textContent =
+      "La estimación usa la mediana de los precios de entrenamiento.";
   }
 });
-
-const modelName = data.model.kind === 'knn'
-  ? 'k-NN con ' + num(data.model.k) + ' vecinos y peso ' + weightLabel(data.model.weights)
-  : chosen.modelo;
-byId('estimator-model').textContent = 'Usamos ' + modelName + '. Se eligió por el menor MAE medio en ' +
-  partition.folds.length + ' folds de entrenamiento (' + preciseUSD(chosen.MAE_CV) + '), antes de evaluar en prueba.';
-const preparation = '<strong>Preparamos y comparamos.</strong> Se escalan los números y se codifican las categorías. ';
-byId('estimator-process').innerHTML = preparation + (data.model.kind === 'knn'
-  ? 'Buscamos las ' + num(data.model.k) + ' fichas de entrenamiento de menor distancia euclídea. ' +
-    (data.model.weights === 'distance' ? 'Promediamos sus precios con pesos inversos a la distancia: cuanto más cerca, mayor peso. Si la distancia es cero, solo se promedian las coincidencias exactas entre los vecinos elegidos.' :
-      'Promediamos sus precios con el mismo peso para cada vecino.')
-  : data.model.kind === 'linear' ? 'La regresión lineal suma el intercepto y los aportes de las variables preparadas.' :
-    'La mediana devuelve el mismo precio de referencia de entrenamiento para todas las fichas.');
-byId('preprocessing-values').innerHTML = table(['Número', 'Mediana para faltantes', 'Media para escalar', 'Desviación para escalar'],
-  data.model.numeric.map((field, i) => [options.etiquetas[field], dec(data.model.median[i]), dec(data.model.mean[i]), dec(data.model.scale[i])])) +
+const nombreModelo =
+  datos.model.kind === "knn"
+    ? "k-NN con " +
+      formatearEntero(datos.model.k) +
+      " vecinos y peso " +
+      nombreDelPeso(datos.model.weights)
+    : ganador.modelo;
+buscarElemento("estimator-model").textContent =
+  "Usamos " +
+  nombreModelo +
+  ". Se eligió por el menor MAE medio en " +
+  particion.folds.length +
+  " folds de entrenamiento (" +
+  dolaresConCentavos(ganador.MAE_CV) +
+  "), antes de evaluar en prueba.";
+const preparacion =
+  "<strong>Preparamos y comparamos.</strong> Se escalan los números y se codifican las categorías. ";
+buscarElemento("estimator-process").innerHTML =
+  preparacion +
+  (datos.model.kind === "knn"
+    ? "Buscamos las " +
+      formatearEntero(datos.model.k) +
+      " fichas de entrenamiento de menor distancia euclídea. " +
+      (datos.model.weights === "distance"
+        ? "Promediamos sus precios con pesos inversos a la distancia: cuanto más cerca, mayor peso. Si la distancia es cero, solo se promedian las coincidencias exactas entre los vecinos elegidos."
+        : "Promediamos sus precios con el mismo peso para cada vecino.")
+    : datos.model.kind === "linear"
+      ? "La regresión lineal suma el intercepto y los aportes de las variables preparadas."
+      : "La mediana devuelve el mismo precio de referencia de entrenamiento para todas las fichas.");
+buscarElemento("preprocessing-values").innerHTML =
+  armarTabla(
+    ["Número", "Mediana para faltantes", "Media para escalar", "Desviación para escalar"],
+    datos.model.numeric.map((campo, posicion) => [
+      opciones.etiquetas[campo],
+      formatearDecimal(datos.model.median[posicion]),
+      formatearDecimal(datos.model.mean[posicion]),
+      formatearDecimal(datos.model.scale[posicion]),
+    ]),
+  ) +
   '<p class="note">Valores mostrados con dos decimales; el cálculo conserva la precisión exportada.</p>' +
-  table(['Categoría', 'Moda para faltantes', 'Categorías codificadas'],
-    data.model.categorical.map((field, i) => [options.etiquetas[field], data.model.mode[i], data.model.categories[i].length]));
-byId('code-source').textContent = data.implementation.file + ' · ' + data.implementation.function + ' (fragmento real incorporado por el exportador).';
-byId('real-code').textContent = data.implementation.code;
-byId('estimator-ties').textContent = data.model.kind === 'knn'
-  ? 'Los pesos se normalizan para sumar 1. Si dos distancias empatan, se conserva el orden de entrenamiento. Marca o modelo iguales no son un filtro: son parte de la distancia; pueden aparecer vecinos de otra marca o modelo.'
-  : 'El navegador aplica los mismos parámetros de imputación, escalado y categorías que el Pipeline ajustado.';
-for (const [key, src] of Object.entries(data.edaImages)) byId('eda-' + key).src = src;
-byId('brand-summary').innerHTML = table(['Marca', 'Avisos', 'Mediana publicada (USD)'],
-  data.brandSummary.map(row => [row.brand, num(row.n), num(row.mediana)]));
-
-const reduction = 1 - chosen.MAE_test / baseline.MAE_test;
-byId("conclusion").textContent = chosen.modelo + " obtuvo un MAE de " + preciseUSD(chosen.MAE_test) +
-  " en prueba. El MAE fue " + num(reduction * 100) + " % menor que el del baseline de mediana.";
-const source = data.source;
-byId("provenance").innerHTML =
-  "<p>Datos de la API pública de Mercado Libre Argentina recopilados por " + safe(source.author) +
-  ". Versión " + source.version + " publicada y actualizada en febrero de 2024. Licencia declarada en Kaggle: " +
-  safe(source.license) + ". Descarga del " + safe(source.downloaded_on.split("-").reverse().join("/")) + ".</p>" +
-  "<p>El modelo usa precios directamente en USD. Las " + num(data.brands) + " marcas y los " + num(data.models) +
+  armarTabla(
+    ["Categoría", "Moda para faltantes", "Categorías codificadas"],
+    datos.model.categorical.map((campo, posicion) => [
+      opciones.etiquetas[campo],
+      datos.model.mode[posicion],
+      datos.model.categories[posicion].length,
+    ]),
+  );
+buscarElemento("code-source").textContent =
+  datos.implementation.file +
+  " · " +
+  datos.implementation.function +
+  " (fragmento real incorporado por el exportador).";
+buscarElemento("real-code").textContent = datos.implementation.code;
+buscarElemento("estimator-ties").textContent =
+  datos.model.kind === "knn"
+    ? "Los pesos se normalizan para sumar 1. Si dos distancias empatan, se conserva el orden de entrenamiento. Marca o modelo iguales no son un filtro: son parte de la distancia; pueden aparecer vecinos de otra marca o modelo."
+    : "El navegador aplica los mismos parámetros de imputación, escalado y categorías que el Pipeline ajustado.";
+for (const [clave, imagen] of Object.entries(datos.edaImages))
+  buscarElemento("eda-" + clave).src = imagen;
+buscarElemento("brand-summary").innerHTML = armarTabla(
+  ["Marca", "Avisos", "Mediana publicada (USD)"],
+  datos.brandSummary.map((fila) => [
+    fila.brand,
+    formatearEntero(fila.n),
+    formatearEntero(fila.mediana),
+  ]),
+);
+const reduccion = 1 - ganador.MAE_test / referencia.MAE_test;
+buscarElemento("conclusion").textContent =
+  ganador.modelo +
+  " obtuvo un MAE de " +
+  dolaresConCentavos(ganador.MAE_test) +
+  " en prueba. El MAE fue " +
+  formatearEntero(reduccion * 100) +
+  " % menor que el del baseline de mediana.";
+const fuente = datos.source;
+buscarElemento("provenance").innerHTML =
+  "<p>Datos de la API pública de Mercado Libre Argentina recopilados por " +
+  escaparTexto(fuente.author) +
+  ". Versión " +
+  fuente.version +
+  " publicada y actualizada en febrero de 2024. Licencia declarada en Kaggle: " +
+  escaparTexto(fuente.license) +
+  ". Descarga del " +
+  escaparTexto(fuente.downloaded_on.split("-").reverse().join("/")) +
+  ".</p>" +
+  "<p>El modelo usa precios directamente en USD. Las " +
+  formatearEntero(datos.brands) +
+  " marcas y los " +
+  formatearEntero(datos.models) +
   " modelos de la muestra son un recorte de la oferta. El año es el de fabricación.</p>" +
   "<p>Validación en cinco particiones agrupadas. Preprocesamiento ajustado en cada partición. " +
-  "Evaluación con " + percent(partition.fraccion_test) + " de los avisos limpios reservados para prueba.</p>" +
-  '<p class="note">SHA-256 del CSV <code>' + safe(source.sha256) + '</code></p>' +
-  '<p><a href="' + safe(source.source) + '">Ficha del dataset en Kaggle</a></p>';
+  "Evaluación con " +
+  porcentaje(particion.fraccion_test) +
+  " de los avisos limpios reservados para prueba.</p>" +
+  '<p class="note">SHA-256 del CSV <code>' +
+  escaparTexto(fuente.sha256) +
+  "</code></p>" +
+  '<p><a href="' +
+  escaparTexto(fuente.source) +
+  '">Ficha del dataset en Kaggle</a></p>';
+const graficos = {
+  histogram: mostrarHistograma,
+  "relation-chart": mostrarRelacion,
+  "error-chart": mostrarCaso,
+};
+const observador = new ResizeObserver((entradas) =>
+  entradas.forEach(({ target: destino }) => {
+    if (destino.clientWidth) graficos[destino.id]();
+  }),
+);
+Object.keys(graficos).forEach((identificador) => observador.observe(buscarElemento(identificador)));
 
-const charts = {"histogram": showHistogram, "relation-chart": showRelation, "error-chart": showCase};
-const observer = new ResizeObserver(entries => entries.forEach(({target}) => {
-  if (target.clientWidth) charts[target.id]();
-}));
-Object.keys(charts).forEach(id => observer.observe(byId(id)));
-
-// Local anchors stay in this document and move keyboard focus with the visible section.
-const sections = [...document.querySelectorAll('main > section')];
-const route = byId('route-menu');
-const sectionTitle = section => section.querySelector('h1, h2').textContent;
-byId('route-links').innerHTML = sections.map(section => '<li><a href="#' + section.id + '">' +
-  safe(sectionTitle(section)) + '</a></li>').join('');
-sections.forEach((section, index) => {
-  const heading = section.querySelector('h1, h2');
-  heading.tabIndex = -1;
-  const label = document.createElement('p');
-  label.className = 'section-number';
-  label.textContent = String(index + 1).padStart(2, '0') + ' / ' + sections.length;
-  heading.before(label);
-  const pager = document.createElement('nav');
-  pager.className = 'section-pager';
-  pager.setAttribute('aria-label', 'Navegar desde ' + sectionTitle(section));
-  pager.innerHTML = (index ? '<a href="#' + sections[index - 1].id + '">← Anterior</a>' : '<a href="#problema">Comenzar →</a>') +
-    (index && index < sections.length - 1 ? '<a href="#' + sections[index + 1].id + '">Siguiente →</a>' :
-      index ? '<a href="#portada">Volver al inicio ↑</a>' : '');
-  section.querySelector('.wrap').append(pager);
+// Los enlaces internos llevan el foco al titulo de la seccion
+const secciones = [...document.querySelectorAll("main > section")];
+const menu = buscarElemento("route-menu");
+const tituloSeccion = (seccion) => seccion.querySelector("h1, h2").textContent;
+buscarElemento("route-links").innerHTML = secciones
+  .map(
+    (seccion) =>
+      '<li><a href="#' + seccion.id + '">' + escaparTexto(tituloSeccion(seccion)) + "</a></li>",
+  )
+  .join("");
+secciones.forEach((seccion, posicion) => {
+  const encabezado = seccion.querySelector("h1, h2");
+  encabezado.tabIndex = -1;
+  const etiqueta = document.createElement("p");
+  etiqueta.className = "section-number";
+  etiqueta.textContent = String(posicion + 1).padStart(2, "0") + " / " + secciones.length;
+  encabezado.before(etiqueta);
+  const navegacion = document.createElement("nav");
+  navegacion.className = "section-pager";
+  navegacion.setAttribute("aria-label", "Navegar desde " + tituloSeccion(seccion));
+  navegacion.innerHTML =
+    (posicion
+      ? '<a href="#' + secciones[posicion - 1].id + '">← Anterior</a>'
+      : '<a href="#problema">Comenzar →</a>') +
+    (posicion && posicion < secciones.length - 1
+      ? '<a href="#' + secciones[posicion + 1].id + '">Siguiente →</a>'
+      : posicion
+        ? '<a href="#portada">Volver al inicio ↑</a>'
+        : "");
+  seccion.querySelector(".wrap").append(navegacion);
 });
-document.addEventListener('click', event => {
-  const link = event.target.closest('a[href^="#"]');
-  if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button) return;
-  const target = document.querySelector(link.getAttribute('href'));
-  if (!target) return;
-  event.preventDefault();
-  route.open = false;
-  const heading = target.matches('section') ? target.querySelector('h1, h2') : target;
-  heading.focus({preventScroll: true});
-  target.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
-  history.replaceState(null, '', link.getAttribute('href'));
+document.addEventListener("click", (evento) => {
+  const enlace = evento.target.closest('a[href^="#"]');
+  if (
+    !enlace ||
+    evento.ctrlKey ||
+    evento.metaKey ||
+    evento.shiftKey ||
+    evento.altKey ||
+    evento.button
+  )
+    return;
+  const destino = document.querySelector(enlace.getAttribute("href"));
+  if (!destino) return;
+  evento.preventDefault();
+  menu.open = false;
+  const encabezado = destino.matches("section") ? destino.querySelector("h1, h2") : destino;
+  encabezado.focus({
+    preventScroll: true,
+  });
+  destino.scrollIntoView({
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    block: "start",
+  });
+  history.replaceState(null, "", enlace.getAttribute("href"));
 });
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && route.open) {
-    route.open = false;
-    route.querySelector('summary').focus();
+document.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape" && menu.open) {
+    menu.open = false;
+    menu.querySelector("summary").focus();
   }
 });
-document.addEventListener('click', event => { if (route.open && !route.contains(event.target)) route.open = false; });
+document.addEventListener("click", (evento) => {
+  if (menu.open && !menu.contains(evento.target)) menu.open = false;
+});

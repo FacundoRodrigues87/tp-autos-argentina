@@ -27,9 +27,9 @@ python -m presentacion.exportar --modelo /tmp/autos-defensa/modelo.joblib
 
 El primer comando verifica el ganador y las 831 predicciones de test contra los CSV. Además escribe un informe junto al modelo temporal. La integración concilió la validación cruzada: cinco folds por grupos con mezcla y semilla 42, cuyos IDs quedan guardados. MAE CV de k-NN: USD 1.536,72. El test conserva sus 831 predicciones. Ver [integración y reproducción](../docs/integracion-defensa.md). En Windows, reemplazar `/tmp/...` por una carpeta temporal propia.
 
-Las tres fichas de demostración conservan los IDs de la presentación base. `demo_examples` toma sus valores del entrenamiento, en lugar de elegirlos según el orden de autos con kilómetros empatados.
+El notebook y el exportador llaman a `ejemplos` para tomar las mismas tres fichas de entrenamiento por ID.
 
-El payload mantiene nombres, unidades, orden de variables y parámetros del modelo. Solo se agregaron imágenes del notebook, agregación por marca y procedencia del fragmento de código; `modelo.js` conserva el cálculo original. El parámetro `--modelo` cambia la ubicación de lectura del modelo local, no el contrato ni la salida.
+`exportar.py` reúne las tablas, los gráficos y los parámetros del modelo. `modelo.js` muestra paso por paso cómo se prepara una ficha, se buscan los vecinos y se calcula el precio. `app.js` conecta ese cálculo con el formulario y los gráficos. Con `--modelo` podés indicar la ruta al archivo de modelo.
 
 ## Repetir las comprobaciones
 

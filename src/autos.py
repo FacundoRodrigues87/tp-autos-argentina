@@ -1,9 +1,8 @@
-"""Limpieza, evaluación y estimación de precios publicados en USD."""
+"""Limpieza de avisos y estimacion de precios en dolares"""
 
 import hashlib
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import joblib
@@ -20,343 +19,515 @@ from sklearn.model_selection import GridSearchCV, GroupKFold, GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-ROOT = Path(__file__).resolve().parents[1]
-RAW = ROOT / "data/raw/MeliCarPublicactions.csv"
-META = ROOT / "docs/dataset_metadata.json"
-RESULTS = ROOT / "resultados"
-YEAR = 2024
-SEED = 42
-NUM = ["car_year", "km", "engine_l", "power_hp", "doors", "passenger_capacity"]
-CAT = ["brand", "model", "fuel_type", "transmission", "traction_control"]
-FEATURES = NUM + CAT
-REQUIRED = NUM[:2] + CAT[:4]
-GROUP = ["brand", "model", "version", "car_year"]
-SPEC_LIMITS = {
+RAIZ = Path(__file__).resolve().parents[1]
+ARCHIVO_AVISOS = RAIZ / "data/raw/MeliCarPublicactions.csv"
+ARCHIVO_FUENTE = RAIZ / "docs/dataset_metadata.json"
+RESULTADOS = RAIZ / "resultados"
+ANIO_CORTE = 2024
+SEMILLA = 42
+NUMERICAS = ["car_year", "km", "engine_l", "power_hp", "doors", "passenger_capacity"]
+CATEGORICAS = ["brand", "model", "fuel_type", "transmission", "traction_control"]
+PREDICTORAS = NUMERICAS + CATEGORICAS
+OBLIGATORIAS = ["car_year", "km", "brand", "model", "fuel_type", "transmission"]
+COLUMNAS_GRUPO = ["brand", "model", "version", "car_year"]
+RANGOS_ESPECIFICACIONES = {
     "engine_l": (0.5, 10),
     "power_hp": (20, 1500),
     "doors": (2, 6),
     "passenger_capacity": (1, 12),
 }
-LABELS = dict(zip(FEATURES, [
-    "Año", "Kilómetros", "Motor (L)", "Potencia (hp)", "Puertas", "Plazas",
-    "Marca", "Modelo", "Combustible", "Transmisión", "Tracción",
-]))
-NUMBER = r"[+-]?\d+(?:[.,]\d+)?"
-AMOUNT = r"(?:U\$S?|USD|US\$|\$)\s*\d"
-FINANCE = r"\b(?:financi\w*|anticipos?|cuotas?)\b"
-PARTIAL = (
-    rf"\b(?:anticipo|cuota)\s*(?:de\s+|[:=]\s*)?{AMOUNT}"
-    rf"|{AMOUNT}[\d.,]*\s+(?:de\s+)?(?:anticipo|cuota)\b"
-    r"|\bprecio\s+(?:por|de)\s+(?:la\s+)?cuota\b"
-)
+ETIQUETAS = {
+    "car_year": "Año",
+    "km": "Kilómetros",
+    "engine_l": "Motor (L)",
+    "power_hp": "Potencia (hp)",
+    "doors": "Puertas",
+    "passenger_capacity": "Plazas",
+    "brand": "Marca",
+    "model": "Modelo",
+    "fuel_type": "Combustible",
+    "transmission": "Transmisión",
+    "traction_control": "Tracción",
+}
+
+PATRON_NUMERO = r"[+-]?\d+(?:[.,]\d+)?"
+PATRON_IMPORTE = r"(?:U\$S?|USD|US\$|\$)\s*\d"
+PATRON_FINANCIACION = r"\b(?:financi\w*|anticipos?|cuotas?)\b"
+PATRON_ANTICIPO_ANTES = rf"\b(?:anticipo|cuota)\s*(?:de\s+|[:=]\s*)?{PATRON_IMPORTE}"
+PATRON_ANTICIPO_DESPUES = rf"{PATRON_IMPORTE}[\d.,]*\s+(?:de\s+)?(?:anticipo|cuota)\b"
+PATRON_PRECIO_POR_CUOTA = r"\bprecio\s+(?:por|de)\s+(?:la\s+)?cuota\b"
 
 
 def cargar():
-    metadata = json.loads(META.read_text(encoding="utf-8"))
-    if hashlib.sha256(RAW.read_bytes()).hexdigest() != metadata["sha256"]:
+    fuente = json.loads(ARCHIVO_FUENTE.read_text(encoding="utf-8"))
+    huella = hashlib.sha256(ARCHIVO_AVISOS.read_bytes()).hexdigest()
+    if huella != fuente["sha256"]:
         raise ValueError("El CSV no coincide con la huella SHA-256 de la descarga.")
-    return pd.read_csv(RAW, sep=";", dtype="string", keep_default_na=False)
+    return pd.read_csv(ARCHIVO_AVISOS, sep=";", dtype="string", keep_default_na=False)
 
 
-def _numeric(values, unit=""):
-    suffix = rf"(?:\s*{unit})?" if unit else ""
-    parsed = values.str.extract(rf"^({NUMBER}){suffix}$", flags=re.I, expand=False)
-    return pd.to_numeric(parsed.str.replace(",", ".", regex=False), errors="coerce").astype(float)
+def convertir_numeros(textos, unidad=""):
+    patron = rf"^({PATRON_NUMERO})$"
+    if unidad:
+        patron = rf"^({PATRON_NUMERO})(?:\s*{unidad})?$"
+    numeros = textos.str.extract(patron, flags=re.IGNORECASE, expand=False)
+    numeros = numeros.str.replace(",", ".", regex=False)
+    return pd.to_numeric(numeros, errors="coerce").astype(float)
 
 
-def _engine(values):
-    plain = _numeric(values, "l")
-    cc = _numeric(values, r"(?:cc|cm³)")
-    cc_only = values.str.fullmatch(r"\d{3,5}(?:\s*(?:cc|cm³))?", flags=re.I)
-    liters = plain.mask(cc_only, cc / 1000)
-    # A decimal in a description such as "1.6 110CV" identifies displacement.
-    # An isolated integer in "4 cilindros" does not.
-    described = values.str.extract(r"(?<![\d.,])([1-9][.,]\d{1,2})(?![\d.,])", expand=False)
-    return liters.fillna(_numeric(described))
-
-
-def limpiar(raw):
-    """Devuelve la muestra y una auditoría con cantidades e IDs por regla."""
-    counts = []
-
-    def log(action, reason, count, ids=()):
-        counts.append({"accion": action, "motivo": reason, "cantidad": int(count),
-                       "ids": ", ".join(ids)})
-
-    def exclude(frame, mask, reason):
-        log("exclusión", reason, mask.sum(), frame.loc[mask, "id"])
-        return frame.loc[~mask].copy()
-
-    used = raw["condition"].eq("Usado")
-    selected = used & raw["currency"].eq("USD")
-    log("origen", "Publicaciones en el CSV original", len(raw))
-    log("fuera del alcance", "Usados en ARS", (used & ~selected).sum())
-    log("fuera del alcance", "Publicaciones de vehículos nuevos", (~used).sum())
-    d = raw.loc[selected].copy()
-    log("selección", "Usados publicados directamente en USD", len(d))
-
-    d = exclude(d, d["id"].duplicated(), "ID de publicación repetido")
-    for field in ["title", "version", *CAT]:
-        values = d[field].str.strip()
-        d[field] = values.astype(object).where(values.ne(""), np.nan)
-    engine_text = d["engine"].str.strip()
-    d["engine_l"] = _engine(engine_text)
-    engine_variant = d["engine_l"].notna() & (
-        ~engine_text.str.fullmatch(r"[+-]?\d+(?:\.\d+)?") | engine_text.str.fullmatch(r"\d{3,5}")
+def convertir_motor(textos):
+    litros = convertir_numeros(textos, "l")
+    centimetros_cubicos = convertir_numeros(textos, r"(?:cc|cm³)")
+    tiene_centimetros_cubicos = textos.str.fullmatch(
+        r"\d{3,5}(?:\s*(?:cc|cm³))?", flags=re.IGNORECASE
     )
-    log("normalización", "Cilindrada recuperada de texto o unidades", engine_variant.sum(),
-        d.loc[engine_variant, "id"])
-    for source, target, unit in [
-        ("car_year", "car_year", ""), ("price", "price", ""),
-        ("km", "km", "km"), ("engine_power", "power_hp", "hp"),
-        ("doors", "doors", ""), ("passenger_capacity", "passenger_capacity", ""),
-    ]:
-        d[target] = _numeric(d[source].str.strip(), unit)
-        if unit:
-            log("normalización", f"{LABELS[target]} convertido a número", d[target].notna().sum())
-    # Audit specifications on the deduplicated input, including rows excluded later.
-    for field, (low, high) in SPEC_LIMITS.items():
-        source = {"engine_l": "engine", "power_hp": "engine_power"}.get(field, field)
-        original = raw.loc[d.index, source].str.strip()
-        valid = d[field].between(low, high)
-        if field in ("doors", "passenger_capacity"):
-            valid &= d[field].mod(1).eq(0)
-        invalid = original.ne("") & ~valid
-        log("corrección", f"{LABELS[field]} imposible o no interpretable a faltante",
-            invalid.sum(), d.loc[invalid, "id"])
-        d.loc[invalid, field] = np.nan
+    litros.loc[tiene_centimetros_cubicos] = (
+        centimetros_cubicos.loc[tiene_centimetros_cubicos] / 1000
+    )
 
-    d = exclude(d, ~np.isfinite(d["price"]) | d["price"].le(0), "Precio inválido")
-    d = exclude(d, ~np.isfinite(d["km"]) | d["km"].lt(0), "Kilometraje inválido o negativo")
-    valid_year = d["car_year"].between(1886, YEAR) & d["car_year"].mod(1).eq(0)
-    d = exclude(d, ~valid_year, f"Año de fabricación imposible para el corte de {YEAR}")
-    partial = d["title"].str.contains(PARTIAL, case=False, regex=True, na=False)
-    finance = d["title"].str.contains(FINANCE, case=False, regex=True, na=False)
-    mentioned = finance | partial
-    log("revisión", "Títulos con mención de financiación, anticipo o cuotas", mentioned.sum(),
-        d.loc[mentioned, "id"])
-    d = exclude(d, partial, "Importe identificado como anticipo o cuota en el título")
-    log("conservación", "Títulos que ofrecen financiación sin identificar el importe como parcial",
-        (finance & ~partial).sum())
-    log("conservación", "Precios descartados solo por ser extremos", 0)
-    log("resultado", "Publicaciones aptas para el análisis", len(d))
-    return d.reset_index(drop=True), pd.DataFrame(counts)
+    # Un decimal puede indicar litros aunque el campo tenga mas texto
+    # Un entero en la descripcion de los cilindros no indica litros
+    decimales = textos.str.extract(r"(?<![\d.,])([1-9][.,]\d{1,2})(?![\d.,])", expand=False)
+    return litros.fillna(convertir_numeros(decimales))
+
+
+def registrar(auditoria, accion, motivo, cantidad, ids=()):
+    auditoria.append({
+        "accion": accion,
+        "motivo": motivo,
+        "cantidad": int(cantidad),
+        "ids": ", ".join(ids),
+    })
+
+
+def quitar_avisos(avisos, excluir, motivo, auditoria):
+    ids = avisos.loc[excluir, "id"]
+    registrar(auditoria, "exclusión", motivo, len(ids), ids)
+    return avisos.loc[~excluir].copy()
+
+
+def limpiar(original):
+    """Devuelve los avisos limpios y las decisiones de limpieza"""
+
+    auditoria = []
+    es_usado = original["condition"].eq("Usado")
+    esta_en_dolares = original["currency"].eq("USD")
+    seleccionados = es_usado & esta_en_dolares
+
+    registrar(auditoria, "origen", "Publicaciones en el CSV original", len(original))
+    registrar(auditoria, "fuera del alcance", "Usados en ARS", (es_usado & ~esta_en_dolares).sum())
+    registrar(auditoria, "fuera del alcance", "Publicaciones de vehículos nuevos", (~es_usado).sum())
+    avisos = original.loc[seleccionados].copy()
+    registrar(auditoria, "selección", "Usados publicados directamente en USD", len(avisos))
+
+    repetidos = avisos["id"].duplicated()
+    avisos = quitar_avisos(avisos, repetidos, "ID de publicación repetido", auditoria)
+    columnas_texto = ["title", "version"] + CATEGORICAS
+    for columna in columnas_texto:
+        textos = avisos[columna].str.strip()
+        avisos[columna] = textos.astype(object).replace("", np.nan)
+
+    texto_motor = avisos["engine"].str.strip()
+    avisos["engine_l"] = convertir_motor(texto_motor)
+    formato_simple = texto_motor.str.fullmatch(r"[+-]?\d+(?:\.\d+)?")
+    formato_entero_largo = texto_motor.str.fullmatch(r"\d{3,5}")
+    motor_recuperado = avisos["engine_l"].notna() & (~formato_simple | formato_entero_largo)
+    ids_motor = avisos.loc[motor_recuperado, "id"]
+    registrar(auditoria, "normalización", "Cilindrada recuperada de texto o unidades", len(ids_motor), ids_motor)
+
+    avisos["car_year"] = convertir_numeros(avisos["car_year"].str.strip())
+    avisos["price"] = convertir_numeros(avisos["price"].str.strip())
+    avisos["km"] = convertir_numeros(avisos["km"].str.strip(), "km")
+    avisos["power_hp"] = convertir_numeros(avisos["engine_power"].str.strip(), "hp")
+    avisos["doors"] = convertir_numeros(avisos["doors"].str.strip())
+    avisos["passenger_capacity"] = convertir_numeros(avisos["passenger_capacity"].str.strip())
+    registrar(auditoria, "normalización", f"{ETIQUETAS['km']} convertido a número", avisos["km"].count())
+    registrar(auditoria, "normalización", f"{ETIQUETAS['power_hp']} convertido a número", avisos["power_hp"].count())
+
+    # Registramos las especificaciones invalidas antes de quitar mas avisos
+    columnas_originales = {
+        "engine_l": "engine",
+        "power_hp": "engine_power",
+        "doors": "doors",
+        "passenger_capacity": "passenger_capacity",
+    }
+    for columna in RANGOS_ESPECIFICACIONES:
+        minimo, maximo = RANGOS_ESPECIFICACIONES[columna]
+        textos = original.loc[avisos.index, columnas_originales[columna]].str.strip()
+        es_valido = avisos[columna].between(minimo, maximo)
+        if columna in ("doors", "passenger_capacity"):
+            es_entero = avisos[columna].mod(1).eq(0)
+            es_valido = es_valido & es_entero
+        es_invalido = textos.ne("") & ~es_valido
+        ids_invalidos = avisos.loc[es_invalido, "id"]
+        motivo = f"{ETIQUETAS[columna]} imposible o no interpretable a faltante"
+        registrar(auditoria, "corrección", motivo, len(ids_invalidos), ids_invalidos)
+        avisos.loc[es_invalido, columna] = np.nan
+
+    precio_invalido = ~np.isfinite(avisos["price"]) | avisos["price"].le(0)
+    avisos = quitar_avisos(avisos, precio_invalido, "Precio inválido", auditoria)
+
+    km_invalidos = ~np.isfinite(avisos["km"]) | avisos["km"].lt(0)
+    avisos = quitar_avisos(avisos, km_invalidos, "Kilometraje inválido o negativo", auditoria)
+
+    anio_en_rango = avisos["car_year"].between(1886, ANIO_CORTE)
+    anio_entero = avisos["car_year"].mod(1).eq(0)
+    anio_invalido = ~(anio_en_rango & anio_entero)
+    motivo = f"Año de fabricación imposible para el corte de {ANIO_CORTE}"
+    avisos = quitar_avisos(avisos, anio_invalido, motivo, auditoria)
+
+    titulos = avisos["title"]
+    anticipo_antes = titulos.str.contains(PATRON_ANTICIPO_ANTES, case=False, na=False)
+    anticipo_despues = titulos.str.contains(PATRON_ANTICIPO_DESPUES, case=False, na=False)
+    precio_por_cuota = titulos.str.contains(PATRON_PRECIO_POR_CUOTA, case=False, na=False)
+    es_pago_parcial = anticipo_antes | anticipo_despues | precio_por_cuota
+    ofrece_financiacion = titulos.str.contains(PATRON_FINANCIACION, case=False, na=False)
+    ids_para_revisar = avisos.loc[es_pago_parcial | ofrece_financiacion, "id"]
+    motivo = "Títulos con mención de financiación, anticipo o cuotas"
+    registrar(auditoria, "revisión", motivo, len(ids_para_revisar), ids_para_revisar)
+    avisos = quitar_avisos(avisos, es_pago_parcial, "Importe identificado como anticipo o cuota en el título", auditoria)
+    motivo = "Títulos que ofrecen financiación sin identificar el importe como parcial"
+    registrar(auditoria, "conservación", motivo, (ofrece_financiacion & ~es_pago_parcial).sum())
+    registrar(auditoria, "conservación", "Precios descartados solo por ser extremos", 0)
+    registrar(auditoria, "resultado", "Publicaciones aptas para el análisis", len(avisos))
+
+    return avisos.reset_index(drop=True), pd.DataFrame(auditoria)
 
 
 class VecinosRegresor(RegressorMixin, BaseEstimator):
-    """k-NN euclídeo con el mismo desempate por orden de filas que modelo.js."""
+    """Estima el precio con los avisos mas parecidos"""
 
     def __init__(self, n_neighbors=5, weights="uniform"):
         self.n_neighbors = n_neighbors
         self.weights = weights
 
     def fit(self, X, y):
-        self.vectors_ = np.asarray(X, dtype=float)
-        self.prices_ = np.asarray(y, dtype=float)
+        fichas = X
+        precios = y
+        self.vectors_ = np.asarray(fichas, dtype=float)
+        self.prices_ = np.asarray(precios, dtype=float)
         return self
 
-    def neighbors(self, X):
-        squared = cdist(X, self.vectors_, metric="sqeuclidean")
-        # La raíz conserva el orden, así que se calcula solo para los vecinos elegidos.
-        indices = np.argsort(squared, axis=1, kind="stable")[:, :self.n_neighbors]
-        distances = np.sqrt(np.take_along_axis(squared, indices, axis=1))
-        weights = np.ones_like(distances)
-        if self.weights == "distance":
-            zero = distances == 0
-            weights = np.divide(1, distances, out=np.zeros_like(distances), where=~zero)
-            # Una coincidencia exacta tiene prioridad sobre cualquier distancia positiva.
-            weights = np.where(zero.any(axis=1, keepdims=True), zero, weights)
-        weights /= weights.sum(axis=1, keepdims=True)
-        return indices, distances, weights
+    def vecinos(self, fichas):
+        # Calculamos una distancia al cuadrado para cada par de fichas
+        distancias_cuadradas = cdist(fichas, self.vectors_, metric="sqeuclidean")
+        cantidad = min(self.n_neighbors, len(self.vectors_))
+        indices = np.empty((len(distancias_cuadradas), cantidad), dtype=int)
+        distancias = np.empty_like(indices, dtype=float)
+        pesos = np.empty_like(distancias)
+
+        for fila, distancias_de_ficha in enumerate(distancias_cuadradas):
+            # En un empate conservamos el orden original de los avisos
+            orden = np.argsort(distancias_de_ficha, kind="stable")
+            indices_cercanos = orden[:cantidad]
+            distancias_cercanas = np.sqrt(distancias_de_ficha[indices_cercanos])
+            pesos_sin_normalizar = np.ones(cantidad)
+
+            if self.weights == "distance":
+                hay_coincidencias = (distancias_cercanas == 0).any()
+                for posicion, distancia in enumerate(distancias_cercanas):
+                    if hay_coincidencias:
+                        # Cuando hay coincidencias exactas solo cuentan esas fichas
+                        pesos_sin_normalizar[posicion] = float(distancia == 0)
+                    else:
+                        pesos_sin_normalizar[posicion] = 1 / distancia
+
+            indices[fila] = indices_cercanos
+            distancias[fila] = distancias_cercanas
+            pesos[fila] = pesos_sin_normalizar / pesos_sin_normalizar.sum()
+        return indices, distancias, pesos
 
     def predict(self, X):
-        indices, _, weights = self.neighbors(X)
-        return (self.prices_[indices] * weights).sum(axis=1)
+        fichas = X
+        indices, _, pesos = self.vecinos(fichas)
+        estimaciones = []
+        for indices_cercanos, pesos_cercanos in zip(indices, pesos):
+            precios_cercanos = self.prices_[indices_cercanos]
+            aportes = precios_cercanos * pesos_cercanos
+            estimaciones.append(aportes.sum())
+        return np.asarray(estimaciones)
 
 
 def preprocesador():
+    preparar_numeros = Pipeline([
+        ("imputar", SimpleImputer(strategy="median")),
+        ("escalar", StandardScaler()),
+    ])
+    preparar_categorias = Pipeline([
+        ("imputar", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+    ])
     return ColumnTransformer([
-        ("num", Pipeline([
-            ("imputar", SimpleImputer(strategy="median")),
-            ("escalar", StandardScaler()),
-        ]), NUM),
-        ("cat", Pipeline([
-            ("imputar", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-        ]), CAT),
+        ("num", preparar_numeros, NUMERICAS),
+        ("cat", preparar_categorias, CATEGORICAS),
     ])
 
 
-@dataclass
 class Particiones:
-    train: pd.DataFrame
-    test: pd.DataFrame
-    folds: list
-    detalle: dict
+    def __init__(self, entrenamiento, prueba, rondas, detalle):
+        self.entrenamiento = entrenamiento
+        self.prueba = prueba
+        self.rondas = rondas
+        self.detalle = detalle
 
 
-def separar(d):
-    keys = d[GROUP].fillna("").map(lambda value: str(value).casefold())
-    groups = pd.MultiIndex.from_frame(keys).factorize()[0]
-    train, test = next(GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEED)
-                       .split(d, groups=groups))
-    train_groups, test_groups = groups[train], groups[test]
-    shared = len(np.intersect1d(train_groups, test_groups))
-    assert shared == 0
-    # Mezclar grupos con semilla evita depender del orden de empates de tamaños
-    # de la asignación sin shuffle. No se mezclan filas de un mismo grupo.
-    folds = list(GroupKFold(n_splits=5, shuffle=True, random_state=SEED)
-                 .split(d.iloc[train], groups=train_groups))
-    fold_details = []
-    for i, (fit, val) in enumerate(folds, start=1):
-        overlap = len(np.intersect1d(train_groups[fit], train_groups[val]))
-        assert overlap == 0
-        fold_details.append({"fold": i, "ajuste": len(fit), "validacion": len(val),
-                             "grupos_compartidos": overlap,
-                             "ids_ajuste": d.iloc[train[fit]]["id"].tolist(),
-                             "ids_validacion": d.iloc[train[val]]["id"].tolist()})
-    detail = {
-        "semilla": SEED, "variables_grupo": GROUP,
-        "train": len(train), "test": len(test), "fraccion_test": len(test) / len(d),
-        "grupos_train": len(np.unique(train_groups)), "grupos_test": len(np.unique(test_groups)),
-        "grupos_compartidos": shared, "folds": fold_details,
-        "estrategia_cv": "GroupKFold con shuffle=True y random_state=42",
-        "ids_train": d.iloc[train]["id"].tolist(),
-        "ids_test": d.iloc[test]["id"].tolist(),
-    }
-    return Particiones(d.iloc[train].reset_index(drop=True),
-                       d.iloc[test].reset_index(drop=True), folds, detail)
+def separar(avisos):
+    claves = avisos[COLUMNAS_GRUPO].fillna("").astype(str)
+    for columna in COLUMNAS_GRUPO:
+        claves[columna] = claves[columna].str.casefold()
+    grupos, _ = pd.MultiIndex.from_frame(claves).factorize()
 
+    separador = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEMILLA)
+    indices_entrenamiento, indices_prueba = next(separador.split(avisos, groups=grupos))
+    entrenamiento = avisos.iloc[indices_entrenamiento].reset_index(drop=True)
+    prueba = avisos.iloc[indices_prueba].reset_index(drop=True)
+    grupos_entrenamiento = grupos[indices_entrenamiento]
+    grupos_prueba = grupos[indices_prueba]
+    compartidos = set(grupos_entrenamiento) & set(grupos_prueba)
+    assert not compartidos
 
-def seleccionar(partitions):
-    """Compara el MAE de validación y reajusta cada finalista solo con train."""
-    X_train = partitions.train[FEATURES]
-    y_train = partitions.train["price"]
-    choices = {
-        "Baseline mediana": (DummyRegressor(strategy="median"), {}),
-        "Regresión lineal": (LinearRegression(), {}),
-        "k-NN": (VecinosRegresor(), {"modelo__n_neighbors": [5, 15, 35],
-                                    "modelo__weights": ["uniform", "distance"]}),
-    }
-    searches = {}
-    rows = []
-    for name, (model, grid) in choices.items():
-        pipeline = Pipeline([("preparar", preprocesador()), ("modelo", model)])
-        search = GridSearchCV(pipeline, grid, cv=partitions.folds,
-                              scoring="neg_mean_absolute_error", error_score="raise")
-        search.fit(X_train, y_train)
-        searches[name] = search
-        for i, params in enumerate(search.cv_results_["params"]):
-            fold_scores = {
-                f"MAE_fold_{fold + 1}": -search.cv_results_[f"split{fold}_test_score"][i]
-                for fold in range(search.n_splits_)
-            }
-            rows.append({"modelo": name, "vecinos": params.get("modelo__n_neighbors"),
-                         "pesos": params.get("modelo__weights"),
-                         "MAE_CV": -search.cv_results_["mean_test_score"][i], **fold_scores})
-    winner = max(searches, key=lambda name: searches[name].best_score_)
-    return winner, searches, pd.DataFrame(rows).sort_values("MAE_CV", ignore_index=True)
-
-
-def evaluar(partitions, winner, searches):
-    test = partitions.test
-    X_test = test[FEATURES]
-    y_test = test["price"]
-    rows = []
-    cases = test[["id", *FEATURES, "version", "price"]].copy()
-    for name, search in searches.items():
-        pred = search.predict(X_test)
-        if name == winner:
-            cases["precio_estimado"] = pred
-        rows.append({
-            "modelo": name, "MAE_CV": -search.best_score_,
-            "MAE_test": mean_absolute_error(y_test, pred),
-            "RMSE_test": root_mean_squared_error(y_test, pred),
-            "R2_test": r2_score(y_test, pred), "elegido_por_CV": name == winner,
+    # Mezclamos grupos completos y guardamos los ids de cada ronda
+    separador_rondas = GroupKFold(n_splits=5, shuffle=True, random_state=SEMILLA)
+    rondas = list(separador_rondas.split(entrenamiento, groups=grupos_entrenamiento))
+    detalle_rondas = []
+    for numero, (ajuste, validacion) in enumerate(rondas, start=1):
+        grupos_ajuste = set(grupos_entrenamiento[ajuste])
+        grupos_validacion = set(grupos_entrenamiento[validacion])
+        compartidos_ronda = grupos_ajuste & grupos_validacion
+        assert not compartidos_ronda
+        detalle_rondas.append({
+            "fold": numero,
+            "ajuste": len(ajuste),
+            "validacion": len(validacion),
+            "grupos_compartidos": len(compartidos_ronda),
+            "ids_ajuste": entrenamiento.iloc[ajuste]["id"].tolist(),
+            "ids_validacion": entrenamiento.iloc[validacion]["id"].tolist(),
         })
-    cases["error"] = cases["precio_estimado"] - cases["price"]
-    cases["error_abs"] = cases["error"].abs()
-    cases["antiguedad"] = pd.cut(YEAR - cases["car_year"], [-1, 5, 10, np.inf],
-                                 labels=["0 a 5 años", "6 a 10 años", "11 años o más"])
-    cuts = partitions.train["price"].quantile([1/3, 2/3]).tolist()
-    cases["nivel_precio"] = pd.cut(cases["price"], [-np.inf, *cuts, np.inf],
-                                  labels=["Bajo", "Medio", "Alto"])
-    segments = []
-    for field in ["brand", "antiguedad", "nivel_precio"]:
-        part = cases.groupby(field, observed=True).agg(
+    detalle = {
+        "semilla": SEMILLA,
+        "variables_grupo": COLUMNAS_GRUPO,
+        "train": len(entrenamiento),
+        "test": len(prueba),
+        "fraccion_test": len(prueba) / len(avisos),
+        "grupos_train": len(set(grupos_entrenamiento)),
+        "grupos_test": len(set(grupos_prueba)),
+        "grupos_compartidos": len(compartidos),
+        "folds": detalle_rondas,
+        "estrategia_cv": "GroupKFold con shuffle=True y random_state=42",
+        "ids_train": entrenamiento["id"].tolist(),
+        "ids_test": prueba["id"].tolist(),
+    }
+    return Particiones(entrenamiento, prueba, rondas, detalle)
+
+
+def seleccionar(particiones):
+    """Elige el modelo que tiene el menor error de validacion"""
+
+    caracteristicas = particiones.entrenamiento[PREDICTORAS]
+    precios = particiones.entrenamiento["price"]
+    candidatos = [
+        ("Baseline mediana", DummyRegressor(strategy="median"), {}),
+        ("Regresión lineal", LinearRegression(), {}),
+        ("k-NN", VecinosRegresor(), {
+            "modelo__n_neighbors": [5, 15, 35],
+            "modelo__weights": ["uniform", "distance"],
+        }),
+    ]
+    busquedas = {}
+    filas = []
+    for nombre, modelo, parametros in candidatos:
+        preparacion_y_modelo = Pipeline([
+            ("preparar", preprocesador()),
+            ("modelo", modelo),
+        ])
+        busqueda = GridSearchCV(
+            preparacion_y_modelo,
+            parametros,
+            cv=particiones.rondas,
+            scoring="neg_mean_absolute_error",
+            error_score="raise",
+        )
+        busqueda.fit(caracteristicas, precios)
+        busquedas[nombre] = busqueda
+        resultados = busqueda.cv_results_
+        for posicion, combinacion in enumerate(resultados["params"]):
+            fila = {
+                "modelo": nombre,
+                "vecinos": combinacion.get("modelo__n_neighbors"),
+                "pesos": combinacion.get("modelo__weights"),
+                "MAE_CV": -resultados["mean_test_score"][posicion],
+            }
+            for ronda in range(busqueda.n_splits_):
+                clave = f"split{ronda}_test_score"
+                fila[f"MAE_fold_{ronda + 1}"] = -resultados[clave][posicion]
+            filas.append(fila)
+
+    ganador = None
+    menor_error = float("inf")
+    for nombre, busqueda in busquedas.items():
+        error = -busqueda.best_score_
+        if error < menor_error:
+            menor_error = error
+            ganador = nombre
+
+    tabla_validacion = pd.DataFrame(filas).sort_values("MAE_CV", ignore_index=True)
+    return ganador, busquedas, tabla_validacion
+
+
+def evaluar(particiones, ganador, busquedas):
+    prueba = particiones.prueba
+    caracteristicas = prueba[PREDICTORAS]
+    precios = prueba["price"]
+    columnas = ["id"] + PREDICTORAS + ["version", "price"]
+    casos = prueba[columnas].copy()
+    filas_metricas = []
+
+    for nombre, busqueda in busquedas.items():
+        estimaciones = busqueda.predict(caracteristicas)
+        if nombre == ganador:
+            casos["precio_estimado"] = estimaciones
+        filas_metricas.append({
+            "modelo": nombre,
+            "MAE_CV": -busqueda.best_score_,
+            "MAE_test": mean_absolute_error(precios, estimaciones),
+            "RMSE_test": root_mean_squared_error(precios, estimaciones),
+            "R2_test": r2_score(precios, estimaciones),
+            "elegido_por_CV": nombre == ganador,
+        })
+
+    casos["error"] = casos["precio_estimado"] - casos["price"]
+    casos["error_abs"] = casos["error"].abs()
+    antiguedad = ANIO_CORTE - casos["car_year"]
+    casos["antiguedad"] = pd.cut(
+        antiguedad, [-1, 5, 10, np.inf], labels=["0 a 5 años", "6 a 10 años", "11 años o más"]
+    )
+    cortes = particiones.entrenamiento["price"].quantile([1 / 3, 2 / 3]).tolist()
+    casos["nivel_precio"] = pd.cut(
+        casos["price"], [-np.inf, cortes[0], cortes[1], np.inf], labels=["Bajo", "Medio", "Alto"]
+    )
+
+    segmentos = []
+    for columna in ["brand", "antiguedad", "nivel_precio"]:
+        resumen = casos.groupby(columna, observed=True).agg(
             n=("id", "size"), MAE=("error_abs", "mean"), sesgo=("error", "mean"),
-        ).rename_axis("segmento").reset_index()
-        part.insert(0, "variable", field)
-        segments.append(part)
-    return pd.DataFrame(rows), cases, pd.concat(segments, ignore_index=True), cuts
+        )
+        resumen = resumen.rename_axis("segmento").reset_index()
+        resumen.insert(0, "variable", columna)
+        segmentos.append(resumen)
+
+    metricas = pd.DataFrame(filas_metricas)
+    tabla_segmentos = pd.concat(segmentos, ignore_index=True)
+    return metricas, casos, tabla_segmentos, cortes
 
 
-def opciones(train):
-    models = train.groupby("brand")["model"].agg(lambda values: sorted(values.dropna().unique()))
-    categories = {field: sorted(train[field].dropna().unique()) for field in CAT[2:]}
-    limits = {"car_year": [int(train.car_year.min()), int(train.car_year.max())],
-              "km": [0, int(train.km.max())], **SPEC_LIMITS}
-    return {"modelos": models.to_dict(), "categorias": categories, "rangos": limits,
-            "obligatorios": REQUIRED, "enteros": ["car_year", "km", "doors", "passenger_capacity"],
-            "etiquetas": LABELS}
+def opciones(entrenamiento):
+    modelos = {}
+    for marca, avisos_marca in entrenamiento.groupby("brand"):
+        modelos[marca] = sorted(avisos_marca["model"].dropna().unique())
+
+    categorias = {}
+    for columna in ["fuel_type", "transmission", "traction_control"]:
+        categorias[columna] = sorted(entrenamiento[columna].dropna().unique())
+
+    rangos = {
+        "car_year": [int(entrenamiento["car_year"].min()), int(entrenamiento["car_year"].max())],
+        "km": [0, int(entrenamiento["km"].max())],
+    }
+    rangos.update(RANGOS_ESPECIFICACIONES)
+    return {
+        "modelos": modelos,
+        "categorias": categorias,
+        "rangos": rangos,
+        "obligatorios": OBLIGATORIAS,
+        "enteros": ["car_year", "km", "doors", "passenger_capacity"],
+        "etiquetas": ETIQUETAS,
+    }
 
 
-def ficha(values, options):
-    choices = {"brand": options["modelos"],
-               "model": options["modelos"].get(str(values.get("brand", "")).strip(), []),
-               **options["categorias"]}
-    data = {}
-    for field in FEATURES:
-        value = values.get(field)
-        if isinstance(value, str):
-            value = value.strip()
-        if value is None or (isinstance(value, str) and value == ""):
-            if field in options["obligatorios"]:
-                raise ValueError(f"Completá {LABELS[field].lower()}.")
-            data[field] = np.nan
+def ficha(valores, opciones_validas):
+    marca = str(valores.get("brand", "")).strip()
+    categorias_validas = opciones_validas["categorias"].copy()
+    categorias_validas["brand"] = opciones_validas["modelos"]
+    categorias_validas["model"] = opciones_validas["modelos"].get(marca, [])
+    datos_ficha = {}
+
+    for columna in PREDICTORAS:
+        valor = valores.get(columna)
+        etiqueta = ETIQUETAS[columna]
+        if isinstance(valor, str):
+            valor = valor.strip()
+        if valor is None or (isinstance(valor, str) and valor == ""):
+            if columna in opciones_validas["obligatorios"]:
+                raise ValueError(f"Completá {etiqueta.lower()}.")
+            datos_ficha[columna] = np.nan
             continue
-        if field in NUM:
-            if not re.fullmatch(r"[+-]?[0-9]+(?:\.[0-9]+)?", str(value)):
-                raise ValueError(f"{LABELS[field]} debe ser un número.")
-            value = float(value)
-            low, high = options["rangos"][field]
-            if not low <= value <= high or (field in options["enteros"] and not value.is_integer()):
-                raise ValueError(f"{LABELS[field]} debe estar entre {low} y {high}."
-                                 + (" Ingresá un entero." if field in options["enteros"] else ""))
-        else:
-            if value not in choices[field]:
-                raise ValueError(f"{LABELS[field]} no es compatible con las opciones disponibles.")
-        data[field] = value
-    return pd.DataFrame([data], columns=FEATURES)
+
+        if columna in NUMERICAS:
+            if not re.fullmatch(r"[+-]?[0-9]+(?:\.[0-9]+)?", str(valor)):
+                raise ValueError(f"{etiqueta} debe ser un número.")
+            valor = float(valor)
+            minimo, maximo = opciones_validas["rangos"][columna]
+            requiere_entero = columna in opciones_validas["enteros"]
+            fuera_de_rango = not minimo <= valor <= maximo
+            entero_invalido = requiere_entero and not valor.is_integer()
+            if fuera_de_rango or entero_invalido:
+                mensaje = f"{etiqueta} debe estar entre {minimo} y {maximo}."
+                if requiere_entero:
+                    mensaje += " Ingresá un entero."
+                raise ValueError(mensaje)
+        elif valor not in categorias_validas[columna]:
+            raise ValueError(f"{etiqueta} no es compatible con las opciones disponibles.")
+
+        datos_ficha[columna] = valor
+
+    return pd.DataFrame([datos_ficha], columns=PREDICTORAS)
 
 
-def estimar(model, options, values):
-    return float(model.predict(ficha(values, options))[0])
+def estimar(modelo, opciones_validas, valores):
+    ficha_validada = ficha(valores, opciones_validas)
+    estimaciones = modelo.predict(ficha_validada)
+    return float(estimaciones[0])
 
 
-def ejemplos(train):
-    """Fichas de la defensa fijadas por ID, compartidas con el exportador."""
+def ejemplos(entrenamiento):
+    """Elige las mismas fichas de demostracion por su id"""
+
     ids = ["MLA1402454175", "MLA1546276856", "MLA1640255410"]
-    rows = train.set_index("id")
-    if not set(ids).issubset(rows.index):
-        raise ValueError("Una ficha de demostración ya no está en train; revisá sus IDs.")
-    return [{"id": identifier,
-             "vehiculo": rows.loc[identifier, FEATURES if i != 1 else REQUIRED].to_dict()}
-            for i, identifier in enumerate(ids)]
+    avisos = entrenamiento.set_index("id")
+    fichas = []
+    for posicion, id_aviso in enumerate(ids):
+        if id_aviso not in avisos.index:
+            raise ValueError("Una ficha de demostración ya no está en train; revisá sus IDs.")
+        columnas = PREDICTORAS
+        if posicion == 1:
+            columnas = OBLIGATORIAS
+        vehiculo = avisos.loc[id_aviso, columnas].to_dict()
+        fichas.append({"id": id_aviso, "vehiculo": vehiculo})
+    return fichas
 
 
-def guardar(calidad, partitions, winner, searches, cv, metrics, cases, segments, cuts):
-    RESULTS.mkdir(exist_ok=True)
-    for name, frame in [("calidad", calidad), ("validacion_cruzada", cv), ("metricas", metrics),
-                        ("catalogo_evaluacion", cases), ("errores_segmentos", segments)]:
-        frame.to_csv(RESULTS / f"{name}.csv", index=False)
-    detail = {**partitions.detalle, "modelo_elegido": winner,
-              "parametros": searches[winner].best_params_, "cortes_precio_USD": cuts}
-    (RESULTS / "particiones.json").write_text(json.dumps(detail, ensure_ascii=False, indent=2),
-                                              encoding="utf-8")
-    joblib.dump({
-        "nombre": winner, "modelo": searches[winner].best_estimator_,
-        "comparacion_knn": searches["k-NN"].best_estimator_,
-        "opciones": opciones(partitions.train), "train": partitions.train[["id", *FEATURES, "price"]],
-        "ejemplos": ejemplos(partitions.train),
-    }, RESULTS / "modelo.joblib", compress=3)
+def guardar(calidad, particiones, ganador, busquedas, validacion, metricas, casos, segmentos, cortes):
+    RESULTADOS.mkdir(exist_ok=True)
+    calidad.to_csv(RESULTADOS / "calidad.csv", index=False)
+    validacion.to_csv(RESULTADOS / "validacion_cruzada.csv", index=False)
+    metricas.to_csv(RESULTADOS / "metricas.csv", index=False)
+    casos.to_csv(RESULTADOS / "catalogo_evaluacion.csv", index=False)
+    segmentos.to_csv(RESULTADOS / "errores_segmentos.csv", index=False)
+
+    detalle = particiones.detalle.copy()
+    detalle["modelo_elegido"] = ganador
+    detalle["parametros"] = busquedas[ganador].best_params_
+    detalle["cortes_precio_USD"] = cortes
+    texto = json.dumps(detalle, ensure_ascii=False, indent=2)
+    (RESULTADOS / "particiones.json").write_text(texto, encoding="utf-8")
+
+    entrenamiento = particiones.entrenamiento
+    modelo_guardado = {
+        "nombre": ganador,
+        "modelo": busquedas[ganador].best_estimator_,
+        "comparacion_knn": busquedas["k-NN"].best_estimator_,
+        "opciones": opciones(entrenamiento),
+        "train": entrenamiento[["id"] + PREDICTORAS + ["price"]],
+        "ejemplos": ejemplos(entrenamiento),
+    }
+    joblib.dump(modelo_guardado, RESULTADOS / "modelo.joblib", compress=3)
