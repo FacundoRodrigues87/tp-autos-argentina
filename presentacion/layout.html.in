@@ -93,6 +93,16 @@
               <div id="transform-demo" class="transform-demo" aria-live="polite"></div>
             </div>
           </div>
+          <details class="python-example">
+            <summary>Ver Python · Cómo encontramos los IDs repetidos</summary>
+            <p>
+              Con <code>duplicated()</code> de pandas marcamos las apariciones posteriores de cada
+              ID. En los usados en dólares encontramos <strong id="duplicate-count"></strong>.
+              Quitamos las filas marcadas y conservamos la primera aparición de cada ID.
+            </p>
+            <pre><code>/* CODIGO LIMPIEZA */</code></pre>
+            <p class="note"><code>src/autos.py</code> · función <code>limpiar</code></p>
+          </details>
           <details
             ><summary>Ver reglas, cantidades y ejemplos del CSV</summary><div id="audit-table"></div
           ></details>
@@ -196,6 +206,16 @@
               >
             </div>
             <div id="brand-summary"></div>
+          </details>
+          <details class="python-example">
+            <summary>Ver Python · Cómo resumimos los precios por marca</summary>
+            <p>
+              Con <code>groupby()</code> reunimos los avisos de cada marca y con <code>agg()</code>
+              calculamos cuántos hay, su precio medio y su mediana. Usamos la mediana para el
+              gráfico de barras.
+            </p>
+            <pre><code>/* CODIGO MARCAS */</code></pre>
+            <p class="note"><code>TP_autos.ipynb</code> · sección 4</p>
           </details>
         </div>
       </section>
@@ -324,6 +344,16 @@
             </div>
             <div id="segment-table"></div>
           </div>
+          <details class="python-example">
+            <summary>Ver Python · Cómo medimos la diferencia de precio</summary>
+            <p>
+              Restamos el precio publicado a la estimación de cada aviso de prueba. El signo
+              indica si estimamos por encima o por debajo. <code>abs()</code> deja solo el tamaño
+              del error, y el promedio de esos tamaños es el MAE.
+            </p>
+            <pre><code>/* CODIGO ERRORES */</code></pre>
+            <p class="note"><code>src/autos.py</code> · función <code>evaluar</code></p>
+          </details>
         </div>
       </section>
       <section id="estimador" aria-labelledby="h-estimador">

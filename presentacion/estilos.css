@@ -775,6 +775,20 @@ pre {
 code {
   font-family: Consolas, ui-monospace, monospace;
 }
+.python-example summary {
+  color: var(--acento-oscuro);
+}
+.python-example p {
+  max-width: 68ch;
+}
+.python-example pre {
+  width: fit-content;
+  background: #152e2a;
+  color: #f0faf5;
+  font-size: clamp(0.86rem, 1.45vw, 1.05rem);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 767px) {
   .top nav {
     gap: 8px;

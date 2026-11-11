@@ -5,6 +5,7 @@ import base64
 import inspect
 import json
 import textwrap
+from html import escape
 from pathlib import Path
 
 import joblib
@@ -13,10 +14,11 @@ import pandas as pd
 
 from src.autos import (
     ARCHIVO_FUENTE, CATEGORICAS, NUMERICAS, RAIZ, RESULTADOS,
-    VecinosRegresor, cargar, ejemplos, limpiar, preprocesador,
+    VecinosRegresor, cargar, ejemplos, evaluar, limpiar, preprocesador,
 )
 
 CARPETA_PRESENTACION = Path(__file__).resolve().parent
+ARCHIVO_NOTEBOOK = RAIZ / "TP_autos.ipynb"
 
 
 def registros(tabla):
@@ -162,6 +164,12 @@ def datos_presentacion(archivo_modelo=None):
     }
 
 
+def recorte_codigo(fuente, primera_linea, cantidad):
+    lineas = fuente.splitlines()
+    inicio = [linea.strip() for linea in lineas].index(primera_linea)
+    return textwrap.dedent("\n".join(lineas[inicio:inicio + cantidad]))
+
+
 def main(argumentos=None):
     opciones = argparse.ArgumentParser(description=__doc__)
     opciones.add_argument("--modelo", type=Path, help="Ruta del modelo joblib")
@@ -174,6 +182,26 @@ def main(argumentos=None):
     estilos = (CARPETA_PRESENTACION / "estilos.css").read_text(encoding="utf-8")
     modelo = (CARPETA_PRESENTACION / "modelo.js").read_text(encoding="utf-8")
     interacciones = (CARPETA_PRESENTACION / "app.js").read_text(encoding="utf-8")
+
+    notebook = json.loads(ARCHIVO_NOTEBOOK.read_text(encoding="utf-8"))
+    codigo_notebook = "\n\n".join(
+        "".join(celda["source"])
+        for celda in notebook["cells"]
+        if celda["cell_type"] == "code"
+    )
+    ejemplos_python = {
+        "CODIGO LIMPIEZA": recorte_codigo(
+            inspect.getsource(limpiar), 'repetidos = avisos["id"].duplicated()', 2
+        ),
+        "CODIGO MARCAS": recorte_codigo(
+            codigo_notebook, 'por_marca = avisos.groupby("brand").agg(', 5
+        ),
+        "CODIGO ERRORES": recorte_codigo(
+            inspect.getsource(evaluar), 'casos["error"] = casos["precio_estimado"] - casos["price"]', 2
+        ),
+    }
+    for marcador, fragmento in ejemplos_python.items():
+        pagina = pagina.replace(f"/* {marcador} */", escape(fragmento))
 
     pagina = pagina.replace("/* ESTILOS */", estilos)
     pagina = pagina.replace("/* MODELO */", modelo)

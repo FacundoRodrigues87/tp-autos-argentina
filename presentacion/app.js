@@ -102,6 +102,9 @@ function armarResumen(entradas) {
 
 const avisosAuditados = datos.auditExamples;
 const contarRegla = (inicio) => datos.audit.find((fila) => fila.motivo.startsWith(inicio)).cantidad;
+const idsRepetidos = contarRegla("ID de publicación repetido");
+buscarElemento("duplicate-count").textContent =
+  formatearEntero(idsRepetidos) + (idsRepetidos === 1 ? " fila repetida" : " filas repetidas");
 buscarElemento("funnel").innerHTML = armarResumen([
   [formatearEntero(datos.raw.rows), "avisos originales · " + datos.raw.cols + " columnas"],
   [formatearEntero(datos.selected), "usados publicados en USD"],

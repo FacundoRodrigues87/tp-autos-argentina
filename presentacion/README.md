@@ -4,6 +4,8 @@ Una vez generado el archivo local `presentacion.html`, abrilo con doble clic en 
 
 El menú **Recorrido** y los enlaces **Anterior/Siguiente** permiten moverse entre secciones. Tab y Enter operan los controles; Escape cierra el recorrido. Los enlaces internos desplazan la página y llevan el foco al título. Las tablas y las figuras grandes admiten desplazamiento con teclado. La página respeta el movimiento reducido del sistema.
 
+Los bloques **Ver Python** de limpieza, relaciones y errores muestran fragmentos del notebook y de `src/autos.py`. El exportador toma el texto de los archivos originales al regenerar el HTML.
+
 El formulario distingue seis campos obligatorios y cinco opcionales. El resultado y su detalle desaparecen al modificar cualquier campo, cambiar de ficha o limpiar. Los errores se muestran al pulsar **Estimar precio** y el foco va al primer campo inválido; si es opcional se abre su panel. La explicación inicial permanece visible antes de estimar. El detalle técnico usa parámetros exportados y un fragmento real de Python.
 
 ## Regenerar
